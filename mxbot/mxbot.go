@@ -19,6 +19,8 @@ type Bot interface {
 
 	AddCommand(command *Command, filters ...Filter)
 
+	Client() *mautrix.Client
+
 	StartListening(ctx context.Context) error
 	StopListening(ctx context.Context) error
 	GetSyncer() mautrix.Syncer
@@ -26,6 +28,7 @@ type Bot interface {
 
 	SendMessage(ctx context.Context, msg *Message) error
 	JoinRoom(ctx context.Context, roomID id.RoomID) error
+	Download(ctx context.Context, mxcURL id.ContentURI) ([]byte, error)
 	StartTyping(ctx context.Context, roomID id.RoomID) error
 	StopTyping(ctx context.Context, roomID id.RoomID) error
 }
@@ -114,6 +117,15 @@ func (b *DefaultBot) AddCommand(command *Command, filters ...Filter) {
 	)
 }
 
+func (b *DefaultBot) Client() *mautrix.Client {
+	return b.matrixClient
+}
+
+// Download - downloads the content of the mxc URL
+func (b *DefaultBot) Download(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
+	return b.matrixClient.DownloadBytes(ctx, mxcURL)
+}
+
 func (b *DefaultBot) StartListening(ctx context.Context) error {
 
 	if err := b.prepareBot(ctx); err != nil {
@@ -186,7 +198,6 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 
 		if err := b.StartTyping(ctx, evt.RoomID); err != nil {
 			slog.Error("failed to start typing", "err", err)
-			return
 		}
 
 		defer func() {

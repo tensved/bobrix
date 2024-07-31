@@ -7,13 +7,8 @@ import (
 	"log/slog"
 )
 
-func NewAdaBot(username string, password string, homeServerURL string) (*bobrix.Bobrix, error) {
-	bot, err := mxbot.NewDefaultBot("ada",
-		&mxbot.BotCredentials{
-			Username:      username,
-			Password:      password,
-			HomeServerURL: homeServerURL,
-		})
+func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
+	bot, err := mxbot.NewDefaultBot("ada", credentials)
 	if err != nil {
 		return nil, err
 	}

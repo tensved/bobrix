@@ -1,8 +1,8 @@
-# BoBRIX (Bot Bridge Matrix) -  Service Bridge for Matrix Bots
+# BOBRIX (Bot Bridge Matrix) -  Service Bridge for Matrix Bots
 
 ### Overview
 
-BoBRIX (Bot Bridge Matrix) is a Go library designed to facilitate interaction
+BOBRIX (Bot Bridge Matrix) is a Go library designed to facilitate interaction
 with various services through a Matrix client in the form of a bot. BoBRIX abstracts the complexity of integrating
 multiple services by providing a unified set of interaction contracts and a convenient layer
 on top of the Matrix client, enabling seamless service integration.

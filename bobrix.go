@@ -13,14 +13,14 @@ import (
 type ServiceHandler func(ctx mxbot.Ctx, r *contracts.MethodResponse)
 
 // BobrixService - service for bot
-// Binds AI service and adds handler for processing
+// Binds service and adds handler for processing
 type BobrixService struct {
 	Service *contracts.Service
 	Handler ServiceHandler
 }
 
-// Bobrix - AI-bot structure
-// It is a linking structure between two libs: it manages the bot and AI services
+// Bobrix - bot structure
+// It is a connection structure between two components: it manages the bot and service contracts
 type Bobrix struct {
 	bot      mxbot.Bot
 	services []*BobrixService
@@ -43,7 +43,7 @@ func (m *Bobrix) Stop(ctx context.Context) error {
 }
 
 // ConnectService - add service to the bot
-// It is used for adding AI services
+// It is used for adding services
 // It adds handler for processing the events of the service
 func (m *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse)) {
 	m.services = append(m.services, &BobrixService{
@@ -67,15 +67,15 @@ func (m *Bobrix) GetService(name string) (*BobrixService, bool) {
 	return nil, false
 }
 
-type AIRequest struct {
+type ServiceRequest struct {
 	ServiceName string
 	MethodName  string
 	InputParams map[string]any
 }
 
-type AIHandle func(evt *event.Event) *AIRequest
+type ServiceHandle func(evt *event.Event) *ServiceRequest
 
-func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *AIRequest) {
+func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest) {
 
 	m.Use(mxbot.NewEventHandler(
 		event.EventMessage,

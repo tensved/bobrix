@@ -15,12 +15,12 @@ func main() {
 
 	engine := bobrix.NewEngine()
 
-	botCredentials := mxbot.BotCredentials{
+	botCredentials := &mxbot.BotCredentials{
 		Username:      os.Getenv("MX_BOT_USERNAME"),
 		Password:      os.Getenv("MX_BOT_PASSWORD"),
 		HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
 	}
-	adaBot, err := ada.NewAdaBot(botCredentials.Username, botCredentials.Password, botCredentials.HomeServerURL)
+	adaBot, err := ada.NewAdaBot(botCredentials)
 	if err != nil {
 		panic(err)
 	}
