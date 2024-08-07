@@ -84,7 +84,8 @@ func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest
 
 			// if request is nil, it means that the event does not match the contract
 			// and the event should be ignored
-			if request == nil {
+			// or the service is not found
+			if request == nil || request.ServiceName == "" {
 				return nil
 			}
 
