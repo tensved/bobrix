@@ -17,7 +17,7 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 		"ping",
 		func(c mxbot.CommandCtx) error {
 
-			return c.Answer("pong")
+			return c.TextAnswer("pong")
 		}),
 	)
 
@@ -36,7 +36,7 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 			answer = "I don't know"
 		}
 
-		err := ctx.Answer(answer)
+		err := ctx.TextAnswer(answer)
 
 		if err != nil {
 			slog.Error("failed to send message", "error", err)

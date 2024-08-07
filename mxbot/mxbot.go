@@ -2,8 +2,8 @@ package mxbot
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -26,7 +26,7 @@ type Bot interface {
 	GetSyncer() mautrix.Syncer
 	Filters() []Filter
 
-	SendMessage(ctx context.Context, msg *Message) error
+	SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error
 	JoinRoom(ctx context.Context, roomID id.RoomID) error
 	Download(ctx context.Context, mxcURL id.ContentURI) ([]byte, error)
 	StartTyping(ctx context.Context, roomID id.RoomID) error
@@ -160,31 +160,25 @@ func (b *DefaultBot) JoinRoom(ctx context.Context, roomID id.RoomID) error {
 	return err
 }
 
-func (b *DefaultBot) SendMessage(ctx context.Context, msg *Message) error {
+func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error {
 	if msg == nil {
 		return ErrNilMessage
 	}
 
-	if msg.Text != "" {
-		if err := b.sendTextMessage(msg.RoomID, msg.Text); err != nil {
-			b.logger.Error("Failed to send message", "error", err)
-
-			return errors.Join(err, ErrSendMessage)
+	if msg.Type().IsMedia() {
+		uploadResponse, err := b.matrixClient.UploadMedia(ctx, msg.AsReqUpload(roomID))
+		if err != nil {
+			return err
 		}
+		msg.SetContentURI(uploadResponse.ContentURI)
+	}
+
+	_, err := b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsEvent())
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSendMessage, err)
 	}
 
 	return nil
-}
-
-func (b *DefaultBot) sendTextMessage(roomID id.RoomID, text string) error {
-	_, err := b.matrixClient.SendMessageEvent(context.Background(), roomID, event.EventMessage, event.MessageEventContent{
-		MsgType:       event.MsgText,
-		Body:          text,
-		Format:        event.FormatHTML,
-		FormattedBody: fmt.Sprintf("<p>%s</p>", text),
-	})
-
-	return err
 }
 
 func (b *DefaultBot) startSyncer(ctx context.Context) error {

@@ -3,7 +3,7 @@ package bobrix
 import (
 	"context"
 	"encoding/base64"
-	"errors"
+	"fmt"
 	"log/slog"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -19,6 +19,10 @@ func DefaultContractParser() func(evt *event.Event) *ServiceRequest {
 	reInputs := regexp.MustCompile(`-(\w+):"((?:\\"|[^"])*)"`)
 
 	return func(evt *event.Event) *ServiceRequest {
+
+		if evt.Type != event.EventMessage {
+			return nil
+		}
 
 		eventMsg := evt.Content.AsMessage().Body
 
@@ -74,6 +78,10 @@ func AudioMessageContractParser(opts *AudioMessageParserOpts) func(evt *event.Ev
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
+		if evt.Type != event.EventMessage {
+			return nil
+		}
+
 		if evt.Content.AsMessage().MsgType != event.MsgAudio {
 			return nil
 		}
@@ -116,20 +124,49 @@ func handleAudioMessage(bot Downloader, evt *event.Event) (string, error) {
 	if slices.Contains(allowedMimeTypes, mimeType) {
 		mxcURI, err := id.ContentURIString(evt.Content.Raw["url"].(string)).Parse()
 		if err != nil {
-			return "", errors.New("failed to parse MXC URI")
+			return "", fmt.Errorf("%w: %s", ErrParseMXCURI, err)
 		}
 
 		data, err := bot.Download(ctx, mxcURI)
 		if err != nil {
-			return "", errors.New("failed to download audiofile")
+			return "", fmt.Errorf("%w: %s", ErrDownloadFile, err)
 		}
 
 		encoded := base64.StdEncoding.EncodeToString(data)
 
 		audioData = encoded
 	} else {
-		return "", errors.New("inappropriate MIME type of audiofile: " + mimeType)
+		return "", fmt.Errorf("%w: %s", ErrInappropriateMimeType, mimeType)
 	}
 
 	return audioData, nil
+}
+
+type AutoParserOpts struct {
+	ServiceName string
+	MethodName  string
+	InputName   string
+}
+
+// AutoRequestParser - auto request parser
+// It is convenient to use it in cases when you need to handle situations
+// when a user sends a message that should be sent immediately by a request
+func AutoRequestParser(opts *AutoParserOpts) func(evt *event.Event) *ServiceRequest {
+
+	return func(evt *event.Event) *ServiceRequest {
+		if evt.Type != event.EventMessage {
+			return nil
+		}
+
+		msg := evt.Content.AsMessage().Body
+
+		inputData := make(map[string]any, 1)
+		inputData[opts.InputName] = msg
+
+		return &ServiceRequest{
+			ServiceName: opts.ServiceName,
+			MethodName:  opts.MethodName,
+			InputParams: inputData,
+		}
+	}
 }

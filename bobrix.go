@@ -82,6 +82,8 @@ func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest
 		func(ctx mxbot.Ctx) error {
 			request := parser(ctx.Event())
 
+			// if request is nil, it means that the event does not match the contract
+			// and the event should be ignored
 			if request == nil {
 				return nil
 			}
@@ -89,7 +91,7 @@ func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest
 			botService, ok := m.GetService(request.ServiceName)
 			if !ok {
 				slog.Error("service not found", "service", request.ServiceName)
-				if err := ctx.Answer(fmt.Sprintf("service \"%s\" not found", request.ServiceName)); err != nil {
+				if err := ctx.TextAnswer(fmt.Sprintf("service \"%s\" not found", request.ServiceName)); err != nil {
 					return err
 				}
 
@@ -103,12 +105,12 @@ func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest
 			if err != nil {
 				switch {
 				case errors.Is(err, contracts.ErrMethodNotFound):
-					if err := ctx.Answer(fmt.Sprintf("method \"%s\" not found", request.MethodName)); err != nil {
+					if err := ctx.TextAnswer(fmt.Sprintf("method \"%s\" not found", request.MethodName)); err != nil {
 						return err
 					}
 
 				default:
-					if err := ctx.Answer(fmt.Sprintf("error: %s", err)); err != nil {
+					if err := ctx.TextAnswer(fmt.Sprintf("error: %s", err)); err != nil {
 						return err
 					}
 				}

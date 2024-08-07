@@ -48,19 +48,35 @@ func main() {
 
 	engine := bobrix.NewEngine()
 
-	botCredentials := mxbot.BotCredentials{
+	botCredentials := &mxbot.BotCredentials{
 		Username:      os.Getenv("MX_BOT_USERNAME"),
 		Password:      os.Getenv("MX_BOT_PASSWORD"),
 		HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
 	}
-	adaBot, err := ada.NewAdaBot(botCredentials.Username, botCredentials.Password, botCredentials.HomeServerURL)
+	adaBot, err := ada.NewAdaBot(botCredentials)
 	if err != nil {
 		panic(err)
 	}
 
 	engine.ConnectBot(adaBot)
-}
 
+	ctx := context.Background()
+
+	if err := engine.Run(ctx); err != nil {
+		panic(err)
+	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	<-quit
+
+	if err := engine.Stop(ctx); err != nil {
+		slog.Error("failed to stop engine", "error", err)
+	}
+
+	slog.Info("service shutdown")
+}
 ```
 
 A basic creating matrix bot:
@@ -163,6 +179,7 @@ func NewADAService(adaHost string) *contracts.Service {
 		},
 	}
 }
+
 ```
 *For a more detailed description see [Service Example](examples/ada/service.go)*
 

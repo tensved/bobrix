@@ -2,6 +2,7 @@ package mxbot
 
 import (
 	"context"
+	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix/event"
 	"sync"
 )
@@ -21,7 +22,8 @@ type Ctx interface {
 
 	Bot() Bot
 
-	Answer(text string) error
+	Answer(msg messages.Message) error
+	TextAnswer(text string) error
 }
 
 var _ Ctx = (*DefaultCtx)(nil)
@@ -66,12 +68,12 @@ func (c *DefaultCtx) Bot() Bot {
 	return c.bot
 }
 
-func (c *DefaultCtx) Answer(text string) error {
+func (c *DefaultCtx) Answer(msg messages.Message) error {
+	return c.bot.SendMessage(c.Context(), c.event.RoomID, msg)
+}
 
-	return c.bot.SendMessage(c.Context(), &Message{
-		RoomID: c.event.RoomID,
-		Text:   text,
-	})
+func (c *DefaultCtx) TextAnswer(text string) error {
+	return c.Answer(messages.NewText(text))
 }
 
 func (c *DefaultCtx) Context() context.Context {
