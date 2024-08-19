@@ -9,4 +9,6 @@ var (
 	ErrHandlerNotFound = errors.New("handler not found")
 
 	ErrInputRequired = errors.New("input is required")
+
+	ErrNoHealthCheckProvided = errors.New("no healthcheck provided")
 )

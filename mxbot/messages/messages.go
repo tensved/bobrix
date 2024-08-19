@@ -10,8 +10,8 @@ import (
 // should be implemented by all message types
 // It is used to send messages to the room by the bot
 type Message interface {
-	Type() event.MessageType                             // get message type
-	AsEvent() event.MessageEventContent                  // get event content
-	AsReqUpload(roomID id.RoomID) mautrix.ReqUploadMedia // get upload media request
-	SetContentURI(contentURI id.ContentURI)              // set content URI after upload
+	Type() event.MessageType                // get message type
+	AsEvent() event.MessageEventContent     // get event contentBytes
+	AsReqUpload() mautrix.ReqUploadMedia    // get upload media request
+	SetContentURI(contentURI id.ContentURI) // set contentBytes URI after upload
 }

@@ -2,8 +2,8 @@ package contracts
 
 // MethodResponse - describes the response of the method
 type MethodResponse struct {
-	Data  map[string]any
-	Error error
+	Data map[string]any
+	Err  error
 }
 
 // Handler - describes the handler of the method

@@ -31,6 +31,8 @@ type Bot interface {
 	Download(ctx context.Context, mxcURL id.ContentURI) ([]byte, error)
 	StartTyping(ctx context.Context, roomID id.RoomID) error
 	StopTyping(ctx context.Context, roomID id.RoomID) error
+
+	Ping(ctx context.Context) error
 }
 
 // BotCredentials - credentials of the bot for Matrix
@@ -166,7 +168,7 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 	}
 
 	if msg.Type().IsMedia() {
-		uploadResponse, err := b.matrixClient.UploadMedia(ctx, msg.AsReqUpload(roomID))
+		uploadResponse, err := b.matrixClient.UploadMedia(ctx, msg.AsReqUpload())
 		if err != nil {
 			return err
 		}
@@ -288,7 +290,6 @@ func (b *DefaultBot) registerBot(ctx context.Context) error {
 		Auth:         nil,
 		Type:         mautrix.AuthTypeDummy,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -319,5 +320,12 @@ func (b *DefaultBot) StartTyping(ctx context.Context, roomID id.RoomID) error {
 // StopTyping - Stops typing on the room
 func (b *DefaultBot) StopTyping(ctx context.Context, roomID id.RoomID) error {
 	_, err := b.matrixClient.UserTyping(ctx, roomID, false, b.typingTimeout)
+	return err
+}
+
+// Ping - Checks if the bot is online
+// It will return error if the bot is offline
+func (b *DefaultBot) Ping(ctx context.Context) error {
+	_, err := b.matrixClient.GetOwnDisplayName(ctx)
 	return err
 }

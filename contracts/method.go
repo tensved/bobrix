@@ -9,13 +9,13 @@ import (
 // Contains the name, description, inputs and outputs.
 // Also contains the name of the handler function and the handler itself
 type Method struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Name        string `json:"name" yaml:"name"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	Inputs  []*Input  `json:"inputs"`
-	Outputs []*Output `json:"outputs"`
+	Inputs  []*Input  `json:"inputs" yaml:"inputs"`
+	Outputs []*Output `json:"outputs" yaml:"outputs"`
 
-	Handler *Handler `json:"handler"`
+	Handler *Handler `json:"handler" yaml:"handler"`
 }
 
 // Call - calls the method
@@ -25,7 +25,7 @@ type Method struct {
 func (m *Method) Call(inputData map[string]any) *MethodResponse {
 	if m.Handler == nil {
 		return &MethodResponse{
-			Error: fmt.Errorf("%w: %s", ErrHandlerNotFound, m.Handler.Name),
+			Err: fmt.Errorf("%w: %s", ErrHandlerNotFound, m.Handler.Name),
 		}
 	}
 	return m.Handler.Do(inputData)
@@ -65,7 +65,7 @@ func (m *Method) GetOutput(name string) *Output {
 func (m *Method) GetTextInputs() []*Input {
 	var inputs []*Input
 	for _, input := range m.Inputs {
-		if input.Type == "text" {
+		if input.Type == IOTypeText {
 			inputs = append(inputs, input)
 		}
 	}
@@ -76,7 +76,40 @@ func (m *Method) GetTextInputs() []*Input {
 func (m *Method) GetAudioInputs() []*Input {
 	var inputs []*Input
 	for _, input := range m.Inputs {
-		if input.Type == "audio" {
+		if input.Type == IOTypeAudio {
+			inputs = append(inputs, input)
+		}
+	}
+	return inputs
+}
+
+// GetImageInputs - returns the list of image inputs
+func (m *Method) GetImageInputs() []*Input {
+	var inputs []*Input
+	for _, input := range m.Inputs {
+		if input.Type == IOTypeImage {
+			inputs = append(inputs, input)
+		}
+	}
+	return inputs
+}
+
+// GetVideoInputs - returns the list of video inputs
+func (m *Method) GetVideoInputs() []*Input {
+	var inputs []*Input
+	for _, input := range m.Inputs {
+		if input.Type == IOTypeVideo {
+			inputs = append(inputs, input)
+		}
+	}
+	return inputs
+}
+
+// GetFileInputs - returns the list of file inputs
+func (m *Method) GetFileInputs() []*Input {
+	var inputs []*Input
+	for _, input := range m.Inputs {
+		if input.Type == IOTypeFile {
 			inputs = append(inputs, input)
 		}
 	}

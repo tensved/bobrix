@@ -13,7 +13,7 @@ var _ Message = (*Image)(nil)
 type Image struct {
 	image      []byte
 	contentURI id.ContentURI
-	text       *string
+	text       string
 }
 
 func (m *Image) Type() event.MessageType {
@@ -22,6 +22,7 @@ func (m *Image) Type() event.MessageType {
 
 func (m *Image) AsEvent() event.MessageEventContent {
 	content := event.MessageEventContent{
+		Body:    m.text,
 		MsgType: event.MsgImage,
 		URL:     m.contentURI.CUString(),
 		Info: &event.FileInfo{
@@ -29,18 +30,14 @@ func (m *Image) AsEvent() event.MessageEventContent {
 		},
 	}
 
-	if m.text != nil {
-		content.Body = *m.text
-	}
-
 	return content
 }
 
-func (m *Image) AsReqUpload(roomID id.RoomID) mautrix.ReqUploadMedia {
+func (m *Image) AsReqUpload() mautrix.ReqUploadMedia {
 	return mautrix.ReqUploadMedia{
 		ContentBytes: m.image,
 		ContentType:  "image/png",
-		FileName:     fmt.Sprintf("%s_%s.png", roomID, time.Now().Format(time.RFC3339)),
+		FileName:     m.text,
 	}
 }
 
@@ -48,11 +45,14 @@ func (m *Image) SetContentURI(contentURI id.ContentURI) {
 	m.contentURI = contentURI
 }
 
+// NewImage - creates a new image message
+// Image - image bytes (base64 encoded)
+// Text - message text (optional: take first argument if set). Default: image_YYYY-MM-DD_HH-MM-SS.png
 func NewImage(image []byte, text ...string) *Image {
-	var t *string
+	t := fmt.Sprintf("image_%s.png", time.Now().Format(time.RFC3339))
 
 	if len(text) > 0 {
-		t = &text[0]
+		t = text[0]
 	}
 
 	return &Image{

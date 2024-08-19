@@ -3,6 +3,7 @@ package mxbot
 import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
+	"slices"
 	"strings"
 	"time"
 )
@@ -49,4 +50,66 @@ func FilterCommand(command *Command) Filter {
 		commandPrefix := command.Prefix + command.Name
 		return strings.EqualFold(wordsInMessage[0], commandPrefix)
 	}
+}
+
+// FilterEventTypes - filter for specific event types
+// check if event type is in the list
+// return true if event type is in the list
+func FilterEventTypes(eventTypes ...event.Type) Filter {
+	return func(evt *event.Event) bool {
+		return slices.Contains(eventTypes, evt.Type)
+	}
+}
+
+// FilterEventMessage - filter for event messages
+// check if event type is event.EventMessage
+// return true if event type is event.EventMessage
+func FilterEventMessage() Filter {
+	return FilterEventTypes(event.EventMessage)
+}
+
+// FilterMessageTypes - filter for specific message types
+// check if message type is in the list of message types (event.MessageType)
+// also check if event type is event.EventMessage
+// return true if message type is in the list
+func FilterMessageTypes(msgTypes ...event.MessageType) Filter {
+	return func(evt *event.Event) bool {
+		return FilterEventMessage()(evt) &&
+			slices.Contains(msgTypes, evt.Content.AsMessage().MsgType)
+	}
+}
+
+// FilterMessageText - filter for text messages
+// check if message type is event.MsgText
+// return true if message type is event.MsgText
+func FilterMessageText() Filter {
+	return FilterMessageTypes(event.MsgText)
+}
+
+// FilterMessageAudio - filter for audio messages
+// check if message type is event.MsgAudio
+// return true if message type is event.MsgAudio
+func FilterMessageAudio() Filter {
+	return FilterMessageTypes(event.MsgAudio)
+}
+
+// FilterMessageImage - filter for image messages
+// check if message type is event.MsgImage
+// return true if message type is event.MsgImage
+func FilterMessageImage() Filter {
+	return FilterMessageTypes(event.MsgImage)
+}
+
+// FilterMessageVideo - filter for video messages
+// check if message type is event.MsgVideo
+// return true if message type is event.MsgVideo
+func FilterMessageVideo() Filter {
+	return FilterMessageTypes(event.MsgVideo)
+}
+
+// FilterMessageFile - filter for file messages
+// check if message type is event.MsgFile
+// return true if message type is event.MsgFile
+func FilterMessageFile() Filter {
+	return FilterMessageTypes(event.MsgFile)
 }

@@ -46,7 +46,7 @@ func (h *LoggerHandler) Handle(ctx Ctx) error {
 	eventType := ctx.Event().Type
 	content := ctx.Event().Content
 
-	h.log.Info("new event", "sender", sender, "type", eventType, "content", content)
+	h.log.Info("new event", "sender", sender, "type", eventType, "content", content.Raw)
 	return nil
 }
 

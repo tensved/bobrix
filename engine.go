@@ -10,8 +10,9 @@ import (
 // Bots can be attached to it (see Bobrix).
 // It is also responsible for launching all bots
 type Engine struct {
-	bots []*Bobrix
-	mx   *sync.RWMutex
+	bots     []*Bobrix
+	services []*BobrixService
+	mx       *sync.RWMutex
 }
 
 func NewEngine() *Engine {
@@ -24,6 +25,12 @@ func NewEngine() *Engine {
 func (e *Engine) ConnectBot(bot *Bobrix) {
 	e.mx.Lock()
 	e.bots = append(e.bots, bot)
+	e.mx.Unlock()
+}
+
+func (e *Engine) ConnectService(service *BobrixService) {
+	e.mx.Lock()
+	e.services = append(e.services, service)
 	e.mx.Unlock()
 }
 
@@ -59,4 +66,11 @@ func (e *Engine) Stop(ctx context.Context) error {
 	wg.Wait()
 
 	return nil
+}
+
+func (e *Engine) Bots() []*Bobrix {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	return e.bots
 }

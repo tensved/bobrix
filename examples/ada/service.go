@@ -34,6 +34,9 @@ func NewADAService(adaHost string) *contracts.Service {
 				Handler: NewADAHandler(adaHost),
 			},
 		},
+		Pinger: contracts.NewWSPinger(
+			contracts.WSOptions{Host: adaHost, Path: "/", Schema: "wss"},
+		),
 	}
 }
 
@@ -55,7 +58,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			if err != nil {
 				slog.Error("failed to dial", "err", err)
 				return &contracts.MethodResponse{
-					Error: fmt.Errorf("failed to dial: %w", err),
+					Err: fmt.Errorf("failed to dial: %w", err),
 				}
 			}
 
@@ -86,7 +89,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 				audio, ok := audioData.(string)
 				if !ok {
 					return &contracts.MethodResponse{
-						Error: fmt.Errorf("audio not found"),
+						Err: fmt.Errorf("audio not found"),
 					}
 				}
 				message.Speech = audio
@@ -96,7 +99,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 
 				if !ok {
 					return &contracts.MethodResponse{
-						Error: fmt.Errorf("prompt not found"),
+						Err: fmt.Errorf("prompt not found"),
 					}
 				}
 
@@ -109,7 +112,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			if err != nil {
 				slog.Error("failed to marshal Input JSON", "err", err)
 				return &contracts.MethodResponse{
-					Error: fmt.Errorf("failed to marshal Input JSON: %w", err),
+					Err: fmt.Errorf("failed to marshal Input JSON: %w", err),
 				}
 			}
 
@@ -119,7 +122,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			if err != nil {
 				slog.Error("failed to send Input JSON", "err", err)
 				return &contracts.MethodResponse{
-					Error: fmt.Errorf("failed to send Input JSON: %w", err),
+					Err: fmt.Errorf("failed to send Input JSON: %w", err),
 				}
 			}
 
@@ -127,7 +130,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			if err != nil {
 				slog.Error("failed to read OutputMessage JSON", "err", err)
 				return &contracts.MethodResponse{
-					Error: fmt.Errorf("failed to read OutputMessage JSON: %w", err),
+					Err: fmt.Errorf("failed to read OutputMessage JSON: %w", err),
 				}
 			}
 
@@ -136,7 +139,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			if err != nil {
 				slog.Error("failed to unmarshal OutputMessage JSON", "err", err)
 				return &contracts.MethodResponse{
-					Error: fmt.Errorf("failed to unmarshal OutputMessage JSON: %w", err),
+					Err: fmt.Errorf("failed to unmarshal OutputMessage JSON: %w", err),
 				}
 			}
 

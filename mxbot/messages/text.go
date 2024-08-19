@@ -23,7 +23,7 @@ func (m *Text) AsEvent() event.MessageEventContent {
 	}
 }
 
-func (m *Text) AsReqUpload(_ id.RoomID) mautrix.ReqUploadMedia {
+func (m *Text) AsReqUpload() mautrix.ReqUploadMedia {
 	return mautrix.ReqUploadMedia{}
 }
 
