@@ -2,7 +2,6 @@ package contracts
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"net/http"
@@ -25,8 +24,8 @@ type WSOptions struct {
 }
 
 type Ping struct {
-	HTTPOpts *HTTPOptions `json:"http,omitempty" yaml:"http,omitempty"`
-	WSOpts   *WSOptions   `json:"ws,omitempty" yaml:"ws,omitempty"`
+	Name string         `json:"name" yaml:"name"`
+	Args map[string]any `json:"args,omitempty" yaml:"args,omitempty"`
 
 	pingFuc func(ctx context.Context) error
 }
@@ -50,58 +49,6 @@ func (p *Ping) Do(ctx context.Context) error {
 
 func (p *Ping) SetHandler(handler func(ctx context.Context) error) {
 	p.pingFuc = handler
-}
-
-func (p *Ping) UnmarshalJSON(data []byte) error {
-	var tempPing struct {
-		HTTPOpts *HTTPOptions `json:"http,omitempty" yaml:"http,omitempty"`
-		WSOpts   *WSOptions   `json:"ws,omitempty" yaml:"ws,omitempty"`
-	}
-
-	if err := json.Unmarshal(data, &tempPing); err != nil {
-		return err
-	}
-
-	p.HTTPOpts = tempPing.HTTPOpts
-
-	switch {
-	case p.HTTPOpts != nil:
-		p.pingFuc = func(ctx context.Context) error {
-			req, err := http.NewRequestWithContext(ctx, p.HTTPOpts.Method,
-				fmt.Sprintf("%s://%s:%s%s", p.HTTPOpts.Schema, p.HTTPOpts.Host, p.HTTPOpts.Port, p.HTTPOpts.Path),
-				nil,
-			)
-			if err != nil {
-				return err
-			}
-
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("ping failed with status code %d", resp.StatusCode)
-			}
-
-			return nil
-		}
-	case p.WSOpts != nil:
-		p.pingFuc = func(ctx context.Context) error {
-			conn, _, err := websocket.DefaultDialer.Dial(
-				fmt.Sprintf("%s://%s:%s%s", p.WSOpts.Schema, p.WSOpts.Host, p.WSOpts.Port, p.WSOpts.Path),
-				nil,
-			)
-			if err != nil {
-				return err
-			}
-
-			return conn.Close()
-		}
-	}
-
-	return nil
 }
 
 func DefaultHTTPPingFunc(opts HTTPOptions) func(ctx context.Context) error {
