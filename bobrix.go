@@ -24,6 +24,7 @@ type BobrixService struct {
 // Bobrix - bot structure
 // It is a connection structure between two components: it manages the bot and service contracts
 type Bobrix struct {
+	name          string
 	bot           mxbot.Bot
 	services      []*BobrixService
 	Healthchecker Healthcheck
@@ -47,6 +48,7 @@ func WithHealthcheck(healthCheckOpts ...HealthcheckOption) BobrixOpts {
 // NewBobrix - Bobrix constructor
 func NewBobrix(mxBot mxbot.Bot, opts ...BobrixOpts) *Bobrix {
 	bobr := &Bobrix{
+		name:     mxBot.Name(),
 		bot:      mxBot,
 		services: make([]*BobrixService, 0),
 	}
@@ -56,6 +58,10 @@ func NewBobrix(mxBot mxbot.Bot, opts ...BobrixOpts) *Bobrix {
 	}
 
 	return bobr
+}
+
+func (m *Bobrix) Name() string {
+	return m.name
 }
 
 func (m *Bobrix) Run(ctx context.Context) error {

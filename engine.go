@@ -17,8 +17,9 @@ type Engine struct {
 
 func NewEngine() *Engine {
 	return &Engine{
-		bots: make([]*Bobrix, 0),
-		mx:   &sync.RWMutex{},
+		bots:     make([]*Bobrix, 0),
+		services: make([]*BobrixService, 0),
+		mx:       &sync.RWMutex{},
 	}
 }
 
@@ -73,4 +74,36 @@ func (e *Engine) Bots() []*Bobrix {
 	defer e.mx.RUnlock()
 
 	return e.bots
+}
+
+func (e *Engine) GetBot(name string) *Bobrix {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	for _, bot := range e.bots {
+		if bot.Name() == name {
+			return bot
+		}
+	}
+	return nil
+}
+
+func (e *Engine) Services() []*BobrixService {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	return e.services
+}
+
+func (e *Engine) GetService(name string) *BobrixService {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	for _, service := range e.services {
+		if service.Service.Name == name {
+			return service
+		}
+	}
+
+	return nil
 }

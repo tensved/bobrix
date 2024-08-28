@@ -23,32 +23,34 @@ type WSOptions struct {
 	Schema string `json:"schema,omitempty" yaml:"schema,omitempty"`
 }
 
+type PingFunc func(ctx context.Context) error
+
 type Ping struct {
 	Name string         `json:"name" yaml:"name"`
 	Args map[string]any `json:"args,omitempty" yaml:"args,omitempty"`
 
-	pingFuc func(ctx context.Context) error
+	pingFunc PingFunc
 }
 
 func NewWSPinger(opts WSOptions) *Ping {
 	return &Ping{
-		pingFuc: DefaultWSPingFunc(opts),
+		pingFunc: DefaultWSPingFunc(opts),
 	}
 }
 
 func NewHTTPPinger(opts HTTPOptions) *Ping {
 
 	return &Ping{
-		pingFuc: DefaultHTTPPingFunc(opts),
+		pingFunc: DefaultHTTPPingFunc(opts),
 	}
 }
 
 func (p *Ping) Do(ctx context.Context) error {
-	return p.pingFuc(ctx)
+	return p.pingFunc(ctx)
 }
 
 func (p *Ping) SetHandler(handler func(ctx context.Context) error) {
-	p.pingFuc = handler
+	p.pingFunc = handler
 }
 
 func DefaultHTTPPingFunc(opts HTTPOptions) func(ctx context.Context) error {

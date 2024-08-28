@@ -13,22 +13,16 @@ const (
 
 // Health - status of bot and service
 type Health struct {
-	Status string `json:"status"`          // "healthy" or "unhealthy"
-	Error  string `json:"error,omitempty"` // only if status is "unhealthy". contains the error message
-}
-
-// ServiceStatus - status of service
-// running - true if service is online.
-type ServiceStatus struct {
-	Health  Health `json:"health"`
-	Running bool   `json:"running"`
+	LastChecked time.Time `json:"last_checked"`
+	Status      string    `json:"status" enums:"healthy,unhealthy"` // "healthy" or "unhealthy"
+	Error       string    `json:"error,omitempty"`                  // only if status is "unhealthy". contains the error message
 }
 
 // BobrixStatus - status of the bot. Contains the health of the bot and the health of the services
 type BobrixStatus struct {
-	Running   bool                     `json:"running"`
-	BotStatus Health                   `json:"bot"`
-	Services  map[string]ServiceStatus `json:"services"`
+	MatrixStatus Health            `json:"matrix"`
+	Services     map[string]Health `json:"services"`
+	Health
 }
 
 // Subscriber - subscriber for healthcheck.
@@ -106,7 +100,7 @@ func WithAutoSwitch() HealthcheckOption {
 }
 
 const (
-	defaultInterval = 5 * time.Second // default healthcheck interval
+	defaultInterval = 15 * time.Second // default healthcheck interval
 )
 
 // NewHealthcheck - healthcheck constructor
@@ -186,7 +180,6 @@ func (h *DefaultHealthcheck) goHealthCheck() {
 func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 	ctx := context.Background()
-
 	wg := &sync.WaitGroup{}
 
 	var botStatus Health
@@ -199,8 +192,8 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 	svcLength := len(h.bobrix.services) // length of services array
 
-	serviceStatuses := make(map[string]ServiceStatus, svcLength)
-	serviceMX := &sync.RWMutex{}
+	serviceStatuses := make(map[string]Health, svcLength)
+	mx := &sync.Mutex{}
 
 	wg.Add(svcLength) // add wg for each service
 
@@ -215,12 +208,9 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 				h.bobrix.services[i].IsOnline = health.Status == healthOk
 			}
 
-			serviceMX.Lock()
-			serviceStatuses[service.Service.Name] = ServiceStatus{
-				Health:  health,
-				Running: service.IsOnline,
-			}
-			serviceMX.Unlock()
+			mx.Lock()
+			serviceStatuses[service.Service.Name] = health
+			mx.Unlock()
 
 			wg.Done()
 		}(i, service)
@@ -228,22 +218,39 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 	wg.Wait() // wait for all pings to finish (bot and services)
 
+	bobrixHealth := Health{
+		LastChecked: time.Now(),
+		Status:      healthOk,
+	}
+
+	if botStatus.Status == healthError {
+		bobrixHealth.Status = healthError
+	}
+
+	for _, svc := range serviceStatuses {
+		if svc.Status == healthError {
+			bobrixHealth.Status = healthError
+		}
+	}
+
 	return &BobrixStatus{
-		Running:   true,
-		BotStatus: botStatus,
-		Services:  serviceStatuses,
+		MatrixStatus: botStatus,
+		Services:     serviceStatuses,
+		Health:       bobrixHealth,
 	}
 }
 
 func (h *DefaultHealthcheck) getBotStatus(ctx context.Context) Health {
 	status := Health{
-		Status: healthOk,
+		LastChecked: time.Now(),
+		Status:      healthOk,
 	}
 
 	if err := h.bobrix.bot.Ping(ctx); err != nil {
 		status = Health{
-			Status: healthError,
-			Error:  err.Error(),
+			LastChecked: time.Now(),
+			Status:      healthError,
+			Error:       err.Error(),
 		}
 	}
 
@@ -252,13 +259,15 @@ func (h *DefaultHealthcheck) getBotStatus(ctx context.Context) Health {
 
 func (h *DefaultHealthcheck) getServiceHealth(ctx context.Context, service *BobrixService) Health {
 	status := Health{
-		Status: healthOk,
+		LastChecked: time.Now(),
+		Status:      healthOk,
 	}
 
 	if err := service.Service.Ping(ctx); err != nil {
 		status = Health{
-			Status: healthError,
-			Error:  err.Error(),
+			LastChecked: time.Now(),
+			Status:      healthError,
+			Error:       err.Error(),
 		}
 	}
 

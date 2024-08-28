@@ -22,7 +22,7 @@ func (m *Audio) Type() event.MessageType {
 
 func (m *Audio) AsEvent() event.MessageEventContent {
 	content := event.MessageEventContent{
-		Body:    m.text,
+		Body:    "Voice message",
 		MsgType: event.MsgAudio,
 		URL:     m.contentURI.CUString(),
 		Info: &event.FileInfo{
