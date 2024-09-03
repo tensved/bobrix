@@ -51,7 +51,7 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 			return
 		}
 
-		answer, ok := r.Data["answer"].(string)
+		answer, ok := r.GetString("answer")
 		if !ok {
 			answer = "I don't know"
 		}

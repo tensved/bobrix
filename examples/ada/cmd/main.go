@@ -44,7 +44,7 @@ func main() {
 
 		for data := range sub.Sync() {
 
-			slog.Info("sync", "data", data)
+			slog.Debug("healthcheck", "data", data)
 		}
 
 	}()

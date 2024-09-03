@@ -26,7 +26,7 @@ func (s *Service) CallMethod(methodName string, inputData map[string]any) (*Meth
 		return nil, fmt.Errorf("%w: %s", ErrMethodNotFound, methodName)
 	}
 
-	return method.Call(inputData), nil
+	return method.Call(inputData)
 }
 
 func (s *Service) AddMethod(method *Method) {

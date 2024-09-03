@@ -46,7 +46,7 @@ type BotCredentials struct {
 
 var (
 	defaultSyncerRetryTime = 5 * time.Second
-	defaultTypingTimeout   = 10 * time.Second
+	defaultTypingTimeout   = 30 * time.Second
 )
 
 // NewDefaultBot - Bot constructor

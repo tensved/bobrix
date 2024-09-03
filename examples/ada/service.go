@@ -18,14 +18,23 @@ func NewADAService(adaHost string) *contracts.Service {
 			"generate": {
 				Name:        "generate",
 				Description: "Generate text using Ada's language model.",
-				Inputs: []*contracts.Input{
+				Inputs: []contracts.Input{
 					{
 						Name:        "prompt",
 						Description: "The prompt to generate text from.",
-						IsRequired:  true,
+						Type:        "text",
+					},
+					{
+						Name:         "response_type",
+						Type:         "text",
+						DefaultValue: "text",
+					},
+					{
+						Name: "audio",
+						Type: "audio",
 					},
 				},
-				Outputs: []*contracts.Output{
+				Outputs: []contracts.Output{
 					{
 						Name:        "text",
 						Description: "The generated text.",
@@ -52,14 +61,18 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 		Args: map[string]any{
 			"URL": adaURL.String(),
 		},
-		Do: func(inputData map[string]any) *contracts.MethodResponse {
-			conn, _, err := websocket.DefaultDialer.Dial(adaURL.String(), nil)
+		Do: func(c contracts.HandlerContext) error {
+			ctx := c.Context()
+
+			conn, _, err := websocket.DefaultDialer.DialContext(
+				ctx,
+				adaURL.String(),
+				nil,
+			)
 
 			if err != nil {
 				slog.Error("failed to dial", "err", err)
-				return &contracts.MethodResponse{
-					Err: fmt.Errorf("failed to dial: %w", err),
-				}
+				return err
 			}
 
 			defer func(conn *websocket.Conn) {
@@ -69,38 +82,34 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 				}
 			}(conn)
 
-			responseType := "text"
-
-			if respType, ok := inputData["response_type"]; ok {
-				responseType = respType.(string)
+			responseType := c.Get("response_type")
+			if responseType == nil {
+				return fmt.Errorf("response type not found")
 			}
+
+			responseTypeString := responseType.(string)
 
 			message := InputMessage{
 				ClientName:   "bot",
 				Username:     "username",
 				RequestType:  "text",
-				ResponseType: responseType,
+				ResponseType: responseTypeString,
 			}
 
-			audioData, ok := inputData["audio"]
-			if ok {
+			audioData := c.Get("audio")
+			if audioData != nil {
 				message.RequestType = "speech"
 
 				audio, ok := audioData.(string)
 				if !ok {
-					return &contracts.MethodResponse{
-						Err: fmt.Errorf("audio not found"),
-					}
+					return fmt.Errorf("audio not found")
 				}
 				message.Speech = audio
 			} else {
 
-				textData, ok := inputData["prompt"]
-
-				if !ok {
-					return &contracts.MethodResponse{
-						Err: fmt.Errorf("prompt not found"),
-					}
+				textData := c.Get("prompt")
+				if textData == nil {
+					return fmt.Errorf("prompt not found")
 				}
 
 				message.RequestType = "text"
@@ -111,45 +120,41 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			messageBytes, err := json.Marshal(message)
 			if err != nil {
 				slog.Error("failed to marshal Input JSON", "err", err)
-				return &contracts.MethodResponse{
-					Err: fmt.Errorf("failed to marshal Input JSON: %w", err),
-				}
+				return fmt.Errorf("failed to marshal Input JSON: %w", err)
 			}
 
-			slog.Error("sending message", "message", string(messageBytes))
+			slog.Info("sending message", "message", string(messageBytes))
 
 			err = conn.WriteMessage(websocket.TextMessage, messageBytes)
 			if err != nil {
 				slog.Error("failed to send Input JSON", "err", err)
-				return &contracts.MethodResponse{
-					Err: fmt.Errorf("failed to send Input JSON: %w", err),
-				}
+				return fmt.Errorf("failed to send Input JSON: %w", err)
 			}
 
 			_, p, err := conn.ReadMessage()
 			if err != nil {
 				slog.Error("failed to read OutputMessage JSON", "err", err)
-				return &contracts.MethodResponse{
-					Err: fmt.Errorf("failed to read OutputMessage JSON: %w", err),
-				}
+				return fmt.Errorf("failed to read OutputMessage JSON: %w", err)
 			}
 
 			var responseMessage OutputMessage
 			err = json.Unmarshal(p, &responseMessage)
 			if err != nil {
 				slog.Error("failed to unmarshal OutputMessage JSON", "err", err)
-				return &contracts.MethodResponse{
-					Err: fmt.Errorf("failed to unmarshal OutputMessage JSON: %w", err),
-				}
+				return fmt.Errorf("failed to unmarshal OutputMessage JSON: %w", err)
 			}
 
 			slog.Info("Received new message from ADA", "answer", responseMessage.Answer, "RESPONSE", responseMessage)
 
-			return &contracts.MethodResponse{
-				Data: map[string]any{
-					"answer": responseMessage.Answer,
-				},
-			}
+			return c.JSON(map[string]any{
+				"answer": responseMessage.Answer,
+			})
+
+			//return &contracts.MethodResponse{
+			//	Data: map[string]any{
+			//		"answer": responseMessage.Answer,
+			//	},
+			//}
 		},
 	}
 }
