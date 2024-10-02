@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 )
 
 // HandlerContext defines an interface for managing inputs and outputs
@@ -92,7 +91,6 @@ func (h *DefaultHandlerContext) GetString(inputName string) (string, bool) {
 func (h *DefaultHandlerContext) GetInt(inputName string) (int, bool) {
 	inp, ok := h.GetInput(inputName)
 	if !ok {
-		slog.Info("inp is nil", "inp", inp)
 		return 0, false
 	}
 

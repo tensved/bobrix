@@ -24,6 +24,10 @@ type Ctx interface {
 
 	Answer(msg messages.Message) error
 	TextAnswer(text string) error
+
+	IsHandled() bool
+	SetHandled()
+	CheckAndSetHandled() bool
 }
 
 var _ Ctx = (*DefaultCtx)(nil)
@@ -36,15 +40,20 @@ type DefaultCtx struct {
 	context context.Context
 
 	bot Bot
+
+	isHandled bool
+	handledMx *sync.Mutex
 }
 
 func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) *DefaultCtx {
 	return &DefaultCtx{
-		context: ctx,
-		event:   event,
-		storage: make(map[string]any),
-		bot:     bot,
-		mx:      &sync.Mutex{},
+		context:   ctx,
+		event:     event,
+		storage:   make(map[string]any),
+		bot:       bot,
+		mx:        &sync.Mutex{},
+		isHandled: false,
+		handledMx: &sync.Mutex{},
 	}
 }
 
@@ -89,4 +98,25 @@ func (c *DefaultCtx) TextAnswer(text string) error {
 // Context - return the root context
 func (c *DefaultCtx) Context() context.Context {
 	return c.context
+}
+
+func (c *DefaultCtx) IsHandled() bool {
+	return c.isHandled
+}
+
+func (c *DefaultCtx) SetHandled() {
+	c.isHandled = true
+}
+
+func (c *DefaultCtx) CheckAndSetHandled() bool {
+	c.handledMx.Lock()
+	defer c.handledMx.Unlock()
+
+	if c.IsHandled() {
+		return false
+	}
+
+	c.SetHandled()
+
+	return true
 }

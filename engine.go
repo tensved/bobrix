@@ -13,6 +13,8 @@ type Engine struct {
 	bots     []*Bobrix
 	services []*BobrixService
 	mx       *sync.RWMutex
+
+	logger *slog.Logger
 }
 
 func NewEngine() *Engine {
@@ -20,6 +22,7 @@ func NewEngine() *Engine {
 		bots:     make([]*Bobrix, 0),
 		services: make([]*BobrixService, 0),
 		mx:       &sync.RWMutex{},
+		logger:   slog.Default(),
 	}
 }
 
@@ -41,7 +44,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		go func(bot *Bobrix) {
 			ctx := context.Background()
 			if err := bot.Run(ctx); err != nil {
-				slog.Error("failed to run bot", "error", err)
+				e.logger.Error("failed to run bot", "error", err)
 			}
 		}(bot)
 	}
@@ -58,7 +61,7 @@ func (e *Engine) Stop(ctx context.Context) error {
 		go func(bot *Bobrix) {
 			ctx := context.Background()
 			if err := bot.Stop(ctx); err != nil {
-				slog.Error("failed to stop bot", "error", err)
+				e.logger.Error("failed to stop bot", "error", err)
 			}
 			wg.Done()
 		}(bot)

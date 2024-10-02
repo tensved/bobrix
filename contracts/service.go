@@ -44,3 +44,42 @@ func (s *Service) Ping(ctx context.Context) error {
 
 	return s.Pinger.Do(ctx)
 }
+
+// GetDefaultMethod - returns the method with the default flag
+// If the service does not have a default method, it returns nil
+func (s *Service) GetDefaultMethod() *Method {
+	for _, method := range s.Methods {
+		if method.IsDefault {
+			return method
+		}
+	}
+
+	return nil
+}
+
+// ServicePublic - describes the service as public.
+// It can be used to print information about the service without sensitive data
+type ServicePublic struct {
+	Name        string                  `json:"name" yaml:"name"`
+	Description string                  `json:"description,omitempty" yaml:"description,omitempty"`
+	Methods     map[string]MethodPublic `json:"methods" yaml:"methods"`
+}
+
+// AsPublic - returns the service as a public service
+func (s *Service) AsPublic() ServicePublic {
+
+	var methodsPublic map[string]MethodPublic
+
+	if s.Methods != nil {
+		methodsPublic = make(map[string]MethodPublic, len(s.Methods))
+		for _, method := range s.Methods {
+			methodsPublic[method.Name] = method.AsPublic()
+		}
+	}
+
+	return ServicePublic{
+		Name:        s.Name,
+		Description: s.Description,
+		Methods:     methodsPublic,
+	}
+}

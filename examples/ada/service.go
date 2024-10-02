@@ -149,12 +149,6 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			return c.JSON(map[string]any{
 				"answer": responseMessage.Answer,
 			})
-
-			//return &contracts.MethodResponse{
-			//	Data: map[string]any{
-			//		"answer": responseMessage.Answer,
-			//	},
-			//}
 		},
 	}
 }

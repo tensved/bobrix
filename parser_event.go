@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/tensved/bobrix/mxbot"
-	"log/slog"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"regexp"
@@ -109,7 +108,6 @@ func AudioMessageContractParser(opts *AudioMessageParserOpts) ContractParser {
 
 		audioData, err := downloadAudioMessage(opts.Downloader, evt)
 		if err != nil {
-			slog.Error("failed to handle audio message", "error", err)
 			return nil
 		}
 
@@ -187,7 +185,6 @@ func ImageMessageContractParser(opts *ImageMessageParserOpts) func(evt *event.Ev
 
 		imageData, err := downloadImageMessage(opts.Downloader, evt)
 		if err != nil {
-			slog.Error("failed to handle image message", "err", err)
 			return nil
 		}
 

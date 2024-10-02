@@ -28,55 +28,59 @@ type Bobrix struct {
 	bot           mxbot.Bot
 	services      []*BobrixService
 	Healthchecker Healthcheck
+
+	logger *slog.Logger
 }
 
 type BobrixOpts func(*Bobrix)
 
 func WithHealthcheck(healthCheckOpts ...HealthcheckOption) BobrixOpts {
-	return func(bobr *Bobrix) {
+	return func(bx *Bobrix) {
 
-		healthcheck := NewHealthcheck(bobr)
+		healthcheck := NewHealthcheck(bx)
 
 		for _, opt := range healthCheckOpts {
 			opt(healthcheck)
 		}
 
-		bobr.Healthchecker = healthcheck
+		bx.Healthchecker = healthcheck
 	}
 }
 
 // NewBobrix - Bobrix constructor
 func NewBobrix(mxBot mxbot.Bot, opts ...BobrixOpts) *Bobrix {
-	bobr := &Bobrix{
+	bx := &Bobrix{
 		name:     mxBot.Name(),
 		bot:      mxBot,
 		services: make([]*BobrixService, 0),
 	}
 
+	bx.logger = slog.Default().With("name", bx.name)
+
 	for _, opt := range opts {
-		opt(bobr)
+		opt(bx)
 	}
 
-	return bobr
+	return bx
 }
 
-func (m *Bobrix) Name() string {
-	return m.name
+func (bx *Bobrix) Name() string {
+	return bx.name
 }
 
-func (m *Bobrix) Run(ctx context.Context) error {
-	return m.bot.StartListening(ctx)
+func (bx *Bobrix) Run(ctx context.Context) error {
+	return bx.bot.StartListening(ctx)
 }
 
-func (m *Bobrix) Stop(ctx context.Context) error {
-	return m.bot.StopListening(ctx)
+func (bx *Bobrix) Stop(ctx context.Context) error {
+	return bx.bot.StopListening(ctx)
 }
 
 // ConnectService - add service to the bot
 // It is used for adding services
 // It adds handler for processing the events of the service
-func (m *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse)) {
-	m.services = append(m.services, &BobrixService{
+func (bx *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse)) {
+	bx.services = append(bx.services, &BobrixService{
 		Service:  service,
 		Handler:  handler,
 		IsOnline: true,
@@ -85,12 +89,12 @@ func (m *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxb
 
 // Use - add handler to the bot
 // It is used for adding event handlers (like middlewares or any other handler)
-func (m *Bobrix) Use(handler mxbot.EventHandler) {
-	m.bot.AddEventHandler(handler)
+func (bx *Bobrix) Use(handler mxbot.EventHandler) {
+	bx.bot.AddEventHandler(handler)
 }
 
-func (m *Bobrix) GetService(name string) (*BobrixService, bool) {
-	for _, botService := range m.services {
+func (bx *Bobrix) GetService(name string) (*BobrixService, bool) {
+	for _, botService := range bx.services {
 		if botService.Service.Name == name {
 			return botService, true
 		}
@@ -98,12 +102,12 @@ func (m *Bobrix) GetService(name string) (*BobrixService, bool) {
 	return nil, false
 }
 
-func (m *Bobrix) Services() []*BobrixService {
-	return m.services
+func (bx *Bobrix) Services() []*BobrixService {
+	return bx.services
 }
 
-func (m *Bobrix) Bot() mxbot.Bot {
-	return m.bot
+func (bx *Bobrix) Bot() mxbot.Bot {
+	return bx.bot
 }
 
 type ServiceRequest struct {
@@ -114,12 +118,13 @@ type ServiceRequest struct {
 
 type ServiceHandle func(evt *event.Event) *ServiceRequest
 
-func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest) {
+func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest) {
 
-	m.Use(
+	bx.Use(
 		mxbot.NewEventHandler(
 			event.EventMessage,
 			func(ctx mxbot.Ctx) error {
+
 				request := parser(ctx.Event())
 
 				// if request is nil, it means that the event does not match the contract
@@ -129,9 +134,14 @@ func (m *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest
 					return nil
 				}
 
-				botService, ok := m.GetService(request.ServiceName)
+				// not handle if it marked
+				if !ctx.CheckAndSetHandled() {
+					return nil
+				}
+
+				botService, ok := bx.GetService(request.ServiceName)
 				if !ok {
-					slog.Error("service not found", "service", request.ServiceName)
+					bx.logger.Error("service not found", "service", request.ServiceName)
 					if err := ctx.TextAnswer(
 						fmt.Sprintf(
 							"service \"%s\" not found",

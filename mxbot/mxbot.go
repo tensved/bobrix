@@ -13,6 +13,7 @@ import (
 
 type Bot interface {
 	Name() string
+	FullName() string // get full name with servername (e.g. @username:servername)
 
 	EventHandlers() []EventHandler
 	AddEventHandler(handler EventHandler)
@@ -25,6 +26,7 @@ type Bot interface {
 	StopListening(ctx context.Context) error
 	GetSyncer() mautrix.Syncer
 	Filters() []Filter
+	AddFilter(filter Filter)
 
 	SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error
 	JoinRoom(ctx context.Context, roomID id.RoomID) error
@@ -49,30 +51,62 @@ var (
 	defaultTypingTimeout   = 30 * time.Second
 )
 
+type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot
+
+// WithSyncerRetryTime - time to wait before retrying a failed sync
+func WithSyncerRetryTime(time time.Duration) BotOptions {
+	return func(bot *DefaultBot) {
+		bot.syncerTimeRetry = time
+	}
+}
+
+// WithTypingTimeout - time to wait before sending a typing event
+func WithTypingTimeout(time time.Duration) BotOptions {
+	return func(bot *DefaultBot) {
+		bot.typingTimeout = time
+	}
+}
+
+func WithDisplayName(name string) BotOptions {
+	return func(bot *DefaultBot) {
+		bot.displayName = name
+	}
+}
+
 // NewDefaultBot - Bot constructor
 // botName - name of the bot (should be unique for engine)
 // botCredentials - matrix credentials of the bot
-func NewDefaultBot(botName string, botCredentials *BotCredentials) (Bot, error) {
+func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOptions) (Bot, error) {
 	client, err := mautrix.NewClient(botCredentials.HomeServerURL, "", "")
 	if err != nil {
 		return nil, err
-	}
-
-	defaultFilters := []Filter{
-		FilterNotMe(client),          // ignore messages from the bot itself
-		FilterAfterStart(time.Now()), // ignore messages that were sent before start time
 	}
 
 	bot := &DefaultBot{
 		matrixClient:  client,
 		name:          botName,
 		eventHandlers: make([]EventHandler, 0),
-		filters:       defaultFilters,
 		credentials:   botCredentials,
 		logger:        slog.Default().With("bot", botName),
 
 		syncerTimeRetry: defaultSyncerRetryTime,
 		typingTimeout:   defaultTypingTimeout,
+	}
+
+	defaultFilters := []Filter{
+		FilterNotMe(client), // ignore messages from the bot itself
+		FilterAfterStart(
+			bot,
+			FilterAfterStartOptions{
+				StartTime:      time.Now(),
+				ProcessInvites: true,
+			}), // ignore messages that were sent before start time
+	}
+
+	bot.filters = defaultFilters
+
+	for _, opt := range opts {
+		opt(bot)
 	}
 
 	return bot, nil
@@ -83,6 +117,7 @@ var _ Bot = (*DefaultBot)(nil)
 // DefaultBot - Bot implementation
 type DefaultBot struct {
 	name          string
+	displayName   string
 	eventHandlers []EventHandler
 
 	filters []Filter
@@ -99,6 +134,10 @@ type DefaultBot struct {
 
 func (b *DefaultBot) Name() string {
 	return b.name
+}
+
+func (b *DefaultBot) FullName() string {
+	return b.Client().UserID.String()
 }
 
 func (b *DefaultBot) EventHandlers() []EventHandler {
@@ -152,14 +191,21 @@ func (b *DefaultBot) Filters() []Filter {
 	return b.filters
 }
 
+func (b *DefaultBot) AddFilter(filter Filter) {
+	b.filters = append(b.filters, filter)
+}
+
 func (b *DefaultBot) GetSyncer() mautrix.Syncer {
 	return b.matrixClient.Syncer
 }
 
 func (b *DefaultBot) JoinRoom(ctx context.Context, roomID id.RoomID) error {
 	_, err := b.matrixClient.JoinRoomByID(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("%w roomID=%v: %w", ErrJoinToRoom, roomID, err)
+	}
 
-	return err
+	return nil
 }
 
 func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error {
@@ -170,14 +216,14 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 	if msg.Type().IsMedia() {
 		uploadResponse, err := b.matrixClient.UploadMedia(ctx, msg.AsReqUpload())
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", ErrUploadMedia, err)
 		}
 		msg.SetContentURI(uploadResponse.ContentURI)
 	}
 
 	_, err := b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsEvent())
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrSendMessage, err)
+		return fmt.Errorf("%w: %w", ErrSendMessage, err)
 	}
 
 	return nil
@@ -193,12 +239,12 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 		}
 
 		if err := b.StartTyping(ctx, evt.RoomID); err != nil {
-			slog.Error("failed to start typing", "err", err)
+			b.logger.Error("failed to start typing", "err", err)
 		}
 
 		defer func() {
 			if err := b.StopTyping(ctx, evt.RoomID); err != nil {
-				slog.Error("failed to stop typing", "err", err)
+				b.logger.Error("failed to stop typing", "err", err)
 			}
 		}()
 
@@ -215,6 +261,7 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 	// Start goroutine for syncing the events from the homeserver
 	go func(ctx context.Context) {
 		b.logger.Info("syncer started")
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -224,7 +271,7 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 			default:
 				err := b.matrixClient.Sync()
 				if err != nil {
-					slog.Error("sync error", "error", err)
+					b.logger.Error("sync error", "error", err)
 					time.Sleep(b.syncerTimeRetry) // Wait before retrying
 				}
 			}
@@ -245,13 +292,19 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		}
 	}
 
+	if b.displayName != "" {
+		if err := b.matrixClient.SetDisplayName(ctx, b.displayName); err != nil {
+			return err
+		}
+	}
+
 	go func() {
 		ctx := context.Background()
 		ticker := time.NewTicker(3 * time.Minute)
 
 		for range ticker.C {
 			if err := b.authBot(ctx); err != nil {
-				slog.Error("failed to auth bot", "error", err)
+				b.logger.Error("failed to auth bot", "error", err)
 			}
 		}
 	}()

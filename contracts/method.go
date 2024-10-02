@@ -16,6 +16,8 @@ type Method struct {
 	Inputs  []Input  `json:"inputs" yaml:"inputs"`
 	Outputs []Output `json:"outputs" yaml:"outputs"`
 
+	IsDefault bool `json:"is_default" yaml:"is_default"`
+
 	Handler *Handler `json:"handler" yaml:"handler"`
 }
 
@@ -190,4 +192,35 @@ func (m *Method) processInputs(inputData map[string]any) (map[string]Input, erro
 	}
 
 	return result, err
+}
+
+// MethodPublic - represents a method in the public API
+// It can be used to print information about the method without sensitive data
+type MethodPublic struct {
+	Name        string         `json:"name" yaml:"name"`
+	Description string         `json:"description,omitempty" yaml:"description,omitempty"`
+	Inputs      []InputPublic  `json:"inputs" yaml:"inputs"`
+	Outputs     []OutputPublic `json:"outputs" yaml:"outputs"`
+	IsDefault   bool           `json:"is_default" yaml:"is_default"`
+}
+
+func (m *Method) AsPublic() MethodPublic {
+
+	inputsPublic := make([]InputPublic, len(m.Inputs))
+	for i, input := range m.Inputs {
+		inputsPublic[i] = input.AsPublic()
+	}
+
+	outputsPublic := make([]OutputPublic, len(m.Outputs))
+	for i, output := range m.Outputs {
+		outputsPublic[i] = output.AsPublic()
+	}
+
+	return MethodPublic{
+		Name:        m.Name,
+		Description: m.Description,
+		Inputs:      inputsPublic,
+		Outputs:     outputsPublic,
+		IsDefault:   m.IsDefault,
+	}
 }
