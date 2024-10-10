@@ -4,26 +4,24 @@ import (
 	"fmt"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"time"
 )
 
 var _ Message = (*Audio)(nil)
 
 type Audio struct {
-	audio      []byte
-	contentURI id.ContentURI
-	text       string
+	audio []byte
+	BaseMessage
 }
 
 func (m *Audio) Type() event.MessageType {
 	return event.MsgAudio
 }
 
-func (m *Audio) AsEvent() event.MessageEventContent {
+func (m *Audio) AsEvent(_ *event.RelatesTo) event.MessageEventContent {
 	content := event.MessageEventContent{
 		Body:    "Voice message",
-		MsgType: event.MsgAudio,
+		MsgType: m.Type(),
 		URL:     m.contentURI.CUString(),
 		Info: &event.FileInfo{
 			MimeType: "audio/mpeg",
@@ -44,10 +42,6 @@ func (m *Audio) AsReqUpload() mautrix.ReqUploadMedia {
 	}
 }
 
-func (m *Audio) SetContentURI(contentURI id.ContentURI) {
-	m.contentURI = contentURI
-}
-
 // NewAudio - creates a new audio message
 // Audio - audio bytes
 // Text - message text (optional: take first argument if set). Default: audio_YYYY-MM-DD_HH-MM-SS.mp3
@@ -58,8 +52,10 @@ func NewAudio(audio []byte, text ...string) *Audio {
 		t = text[0]
 	}
 
+	bm := NewBaseMessage(t)
+
 	return &Audio{
-		audio: audio,
-		text:  t,
+		audio:       audio,
+		BaseMessage: bm,
 	}
 }

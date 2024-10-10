@@ -4,26 +4,24 @@ import (
 	"fmt"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"time"
 )
 
 var _ Message = (*Image)(nil)
 
 type Image struct {
-	image      []byte
-	contentURI id.ContentURI
-	text       string
+	image []byte
+	BaseMessage
 }
 
 func (m *Image) Type() event.MessageType {
 	return event.MsgImage
 }
 
-func (m *Image) AsEvent() event.MessageEventContent {
+func (m *Image) AsEvent(_ *event.RelatesTo) event.MessageEventContent {
 	content := event.MessageEventContent{
 		Body:    m.text,
-		MsgType: event.MsgImage,
+		MsgType: m.Type(),
 		URL:     m.contentURI.CUString(),
 		Info: &event.FileInfo{
 			MimeType: "image/png",
@@ -41,10 +39,6 @@ func (m *Image) AsReqUpload() mautrix.ReqUploadMedia {
 	}
 }
 
-func (m *Image) SetContentURI(contentURI id.ContentURI) {
-	m.contentURI = contentURI
-}
-
 // NewImage - creates a new image message
 // Image - image bytes (base64 encoded)
 // Text - message text (optional: take first argument if set). Default: image_YYYY-MM-DD_HH-MM-SS.png
@@ -55,8 +49,10 @@ func NewImage(image []byte, text ...string) *Image {
 		t = text[0]
 	}
 
+	bm := NewBaseMessage(t)
+
 	return &Image{
-		image: image,
-		text:  t,
+		image:       image,
+		BaseMessage: bm,
 	}
 }

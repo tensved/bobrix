@@ -64,6 +64,8 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 		Do: func(c contracts.HandlerContext) error {
 			ctx := c.Context()
 
+			slog.Info("context history", "ctx", c.Messages())
+
 			conn, _, err := websocket.DefaultDialer.DialContext(
 				ctx,
 				adaURL.String(),
@@ -147,7 +149,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 			slog.Info("Received new message from ADA", "answer", responseMessage.Answer, "RESPONSE", responseMessage)
 
 			return c.JSON(map[string]any{
-				"answer": responseMessage.Answer,
+				"text": responseMessage.Answer,
 			})
 		},
 	}

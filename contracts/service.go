@@ -17,16 +17,20 @@ type Service struct {
 	Pinger *Ping `json:"pinger,omitempty" yaml:"pinger,omitempty"`
 }
 
+type CallOpts struct {
+	Messages Messages
+}
+
 // CallMethod - calls the method with the given name
 // If the method does not exist, it returns an error
 // Otherwise, it calls the method and returns the result
-func (s *Service) CallMethod(methodName string, inputData map[string]any) (*MethodResponse, error) {
+func (s *Service) CallMethod(methodName string, inputData map[string]any, opts ...CallOpts) (*MethodResponse, error) {
 	method, ok := s.Methods[methodName]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrMethodNotFound, methodName)
 	}
 
-	return method.Call(inputData)
+	return method.Call(inputData, opts...)
 }
 
 func (s *Service) AddMethod(method *Method) {

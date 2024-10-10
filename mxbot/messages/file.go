@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"mime"
 )
 
@@ -14,19 +13,18 @@ type File struct {
 	contentBytes []byte
 	name         string
 	fileType     string
-	contentURI   id.ContentURI
-	text         string
+	BaseMessage
 }
 
 func (m *File) Type() event.MessageType {
 	return event.MsgFile
 }
 
-func (m *File) AsEvent() event.MessageEventContent {
+func (m *File) AsEvent(_ *event.RelatesTo) event.MessageEventContent {
 
 	content := event.MessageEventContent{
 		Body:    m.text,
-		MsgType: event.MsgFile,
+		MsgType: m.Type(),
 		URL:     m.contentURI.CUString(),
 		Info: &event.FileInfo{
 			MimeType: m.fileType,
@@ -43,10 +41,6 @@ func (m *File) AsReqUpload() mautrix.ReqUploadMedia {
 		ContentType:  m.fileType,
 		FileName:     m.name,
 	}
-}
-
-func (m *File) SetContentURI(contentURI id.ContentURI) {
-	m.contentURI = contentURI
 }
 
 // NewFile - creates a new file message
@@ -66,10 +60,12 @@ func NewFile(bytes []byte, name string, fileType string, text ...string) *File {
 		mimeType = "application/octet-stream"
 	}
 
+	bm := NewBaseMessage(t)
+
 	return &File{
 		contentBytes: bytes,
-		text:         t,
 		name:         name,
 		fileType:     mimeType,
+		BaseMessage:  bm,
 	}
 }

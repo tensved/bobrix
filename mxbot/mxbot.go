@@ -2,12 +2,14 @@ package mxbot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"slices"
 	"time"
 )
 
@@ -35,6 +37,9 @@ type Bot interface {
 	StopTyping(ctx context.Context, roomID id.RoomID) error
 
 	Ping(ctx context.Context) error
+
+	GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error)
+	GetThreadByEvent(ctx context.Context, evt *event.Event) (*MessagesThread, error)
 }
 
 // BotCredentials - credentials of the bot for Matrix
@@ -248,7 +253,11 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 			}
 		}()
 
-		eventContext := NewDefaultCtx(ctx, evt, b)
+		eventContext, err := NewDefaultCtx(ctx, evt, b)
+		if err != nil {
+			b.logger.Error("failed to create event context", "err", err)
+			return
+		}
 
 		for _, handler := range b.eventHandlers {
 			err := handler.Handle(eventContext)
@@ -381,4 +390,91 @@ func (b *DefaultBot) StopTyping(ctx context.Context, roomID id.RoomID) error {
 func (b *DefaultBot) Ping(ctx context.Context) error {
 	_, err := b.matrixClient.GetOwnDisplayName(ctx)
 	return err
+}
+
+func (b *DefaultBot) GetThreadByEvent(ctx context.Context, evt *event.Event) (*MessagesThread, error) {
+
+	if evt == nil {
+		return nil, ErrNilEvent
+	}
+
+	rel := evt.Content.AsMessage().RelatesTo
+
+	if rel == nil || rel.Type != event.RelThread {
+		return nil, nil
+	}
+
+	roomID := evt.RoomID
+	parentEventID := rel.EventID
+
+	return b.GetThread(ctx, roomID, parentEventID)
+}
+
+// GetThreadStory - получает полную историю всех сообщений
+func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error) {
+
+	msgs, err := b.matrixClient.Messages(
+		ctx,
+		roomID,
+		"",
+		"",
+		mautrix.DirectionBackward,
+		nil,
+		15,
+	)
+	if err != nil {
+		slog.Error("error get messages", "error", err)
+		return nil, err
+	}
+
+	data := make([]*event.Event, 0)
+
+	for _, evt := range msgs.Chunk {
+
+		if evt.ID == parentEventID {
+			data = append(data, evt)
+			break
+		}
+
+		veryRaw := evt.Content.VeryRaw
+
+		if veryRaw == nil {
+			continue
+		}
+
+		var msg *event.MessageEventContent
+
+		if err := json.Unmarshal(veryRaw, &msg); err != nil {
+			slog.Error("error unmarshal message", "error", err)
+			continue
+		}
+
+		evt.Content.Parsed = msg
+
+		rel := msg.RelatesTo
+
+		if rel == nil {
+			slog.Info("rel type nil", "event_id", evt.ID)
+			continue
+		}
+
+		if rel.Type != event.RelThread || rel.EventID != parentEventID {
+			slog.Info("rel type not thread", "event_id", evt.ID, "rel_event_id", rel.EventID, "rel_type", rel.Type)
+			continue
+		}
+
+		data = append(data, evt)
+	}
+
+	slog.Info("data size", "size", len(data))
+
+	slices.Reverse(data)
+
+	thread := &MessagesThread{
+		Messages: data,
+		ParentID: parentEventID,
+		RoomID:   roomID,
+	}
+
+	return thread, nil
 }

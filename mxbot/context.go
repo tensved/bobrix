@@ -20,6 +20,8 @@ type Ctx interface {
 
 	Context() context.Context
 
+	Thread() *MessagesThread
+
 	Bot() Bot
 
 	Answer(msg messages.Message) error
@@ -32,29 +34,61 @@ type Ctx interface {
 
 var _ Ctx = (*DefaultCtx)(nil)
 
+type handlesStatus struct {
+	isHandled bool
+	mx        *sync.Mutex
+}
+
+func (s *handlesStatus) Check() bool {
+	return s.isHandled
+}
+
+func (s *handlesStatus) Set(status bool) {
+	s.isHandled = status
+}
+
+func (s *handlesStatus) Lock() {
+	s.mx.Lock()
+}
+
+func (s *handlesStatus) Unlock() {
+	s.mx.Unlock()
+}
+
 type DefaultCtx struct {
 	event   *event.Event
 	storage map[string]any
+	thread  *MessagesThread
 	mx      *sync.Mutex
 
 	context context.Context
 
 	bot Bot
 
-	isHandled bool
-	handledMx *sync.Mutex
+	handlesStatus *handlesStatus
 }
 
-func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) *DefaultCtx {
-	return &DefaultCtx{
-		context:   ctx,
-		event:     event,
-		storage:   make(map[string]any),
-		bot:       bot,
-		mx:        &sync.Mutex{},
-		isHandled: false,
-		handledMx: &sync.Mutex{},
+func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) (*DefaultCtx, error) {
+
+	thread, err := bot.GetThreadByEvent(ctx, event)
+	if err != nil {
+		return nil, err
 	}
+
+	defaultCtx := &DefaultCtx{
+		context: ctx,
+		event:   event,
+		storage: make(map[string]any),
+		thread:  thread,
+		bot:     bot,
+		mx:      &sync.Mutex{},
+		handlesStatus: &handlesStatus{
+			isHandled: false,
+			mx:        &sync.Mutex{},
+		},
+	}
+
+	return defaultCtx, nil
 }
 
 // Event - get the event from the context.
@@ -101,16 +135,16 @@ func (c *DefaultCtx) Context() context.Context {
 }
 
 func (c *DefaultCtx) IsHandled() bool {
-	return c.isHandled
+	return c.handlesStatus.Check()
 }
 
 func (c *DefaultCtx) SetHandled() {
-	c.isHandled = true
+	c.handlesStatus.Set(true)
 }
 
 func (c *DefaultCtx) CheckAndSetHandled() bool {
-	c.handledMx.Lock()
-	defer c.handledMx.Unlock()
+	c.handlesStatus.Lock()
+	defer c.handlesStatus.Unlock()
 
 	if c.IsHandled() {
 		return false
@@ -119,4 +153,8 @@ func (c *DefaultCtx) CheckAndSetHandled() bool {
 	c.SetHandled()
 
 	return true
+}
+
+func (c *DefaultCtx) Thread() *MessagesThread {
+	return c.thread
 }
