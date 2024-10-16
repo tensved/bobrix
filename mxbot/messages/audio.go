@@ -28,5 +28,6 @@ func NewAudio(audio []byte, text ...string) Message {
 
 			contentURI: id.ContentURI{},
 		},
+		markDownSupport: MarkDownSupportDefault,
 	}
 }

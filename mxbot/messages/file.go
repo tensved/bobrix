@@ -33,5 +33,6 @@ func NewFile(bytes []byte, name string, fileType string, text ...string) Message
 			contentBytes: bytes,
 			contentURI:   id.ContentURI{},
 		},
+		markDownSupport: MarkDownSupportDefault,
 	}
 }

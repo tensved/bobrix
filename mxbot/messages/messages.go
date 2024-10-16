@@ -2,11 +2,18 @@ package messages
 
 import (
 	"encoding/json"
+	"github.com/gomarkdown/markdown"
 	"log/slog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
+
+var MarkDownSupportDefault bool
+
+func init() {
+	MarkDownSupportDefault = true
+}
 
 type Message interface {
 	Type() event.MessageType                // get message type
@@ -18,6 +25,8 @@ type Message interface {
 	SetRelatesTo(rel *event.RelatesTo)
 
 	AddCustomFields(values ...any) // add custom fields to message. Required use as < key, value, ... >
+
+	SetMarkDownSupport(status bool) // set markDown support
 }
 
 type FileInfo struct {
@@ -37,6 +46,8 @@ type BaseMessage struct {
 
 	text string
 
+	markDownSupport bool
+
 	file *FileInfo
 
 	customFields map[string]any
@@ -50,6 +61,14 @@ func (m *BaseMessage) AsEvent() event.MessageEventContent {
 	evt := event.MessageEventContent{
 		MsgType: m.Type(),
 		Body:    m.text,
+	}
+
+	if m.markDownSupport {
+
+		formattedBody := string(markdown.ToHTML([]byte(m.text), nil, nil))
+
+		evt.Format = "org.matrix.custom.html"
+		evt.FormattedBody = formattedBody
 	}
 
 	if m.rel != nil {
@@ -113,4 +132,8 @@ func (m *BaseMessage) AddCustomFields(values ...any) {
 	for i := 0; i < len(values); i += 2 {
 		m.customFields[values[i].(string)] = values[i+1]
 	}
+}
+
+func (m *BaseMessage) SetMarkDownSupport(status bool) {
+	m.markDownSupport = status
 }

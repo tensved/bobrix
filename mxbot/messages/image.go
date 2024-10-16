@@ -25,5 +25,6 @@ func NewImage(image []byte, text ...string) Message {
 			mimeType:     "image/png",
 			contentURI:   id.ContentURI{},
 		},
+		markDownSupport: MarkDownSupportDefault,
 	}
 }

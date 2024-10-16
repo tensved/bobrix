@@ -58,9 +58,7 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 
 		slog.Info("got response", "answer", answer)
 
-		err := ctx.TextAnswer(answer)
-
-		if err != nil {
+		if err := ctx.TextAnswer(answer); err != nil {
 			slog.Error("failed to send message", "error", err)
 		}
 	})
