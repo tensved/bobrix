@@ -62,6 +62,9 @@ func (m *Method) CallWithContext(ctx context.Context, inputData map[string]any, 
 		contextOpts = append(contextOpts, WithMessages(opt.Messages))
 	}
 
+	if opt != nil {
+		contextOpts = append(contextOpts, WithMessages(opt.Messages))
+
 	c := NewHandlerContext(ctx, inputs, outputs, contextOpts...) // create new handler context with the processed inputs
 
 	err = m.Handler.Do(c)

@@ -134,10 +134,12 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 					return nil
 				}
 
-				// not handle if it marked
-				if !ctx.CheckAndSetHandled() {
+				isHandled, unlocker := ctx.IsHandledWithUnlocker()
+				if isHandled {
 					return nil
 				}
+
+				defer unlocker()
 
 				botService, ok := bx.GetService(request.ServiceName)
 				if !ok {
@@ -166,7 +168,19 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 					return nil
 				}
 
-				response, err := service.CallMethod(request.MethodName, request.InputParams)
+				opts := contracts.CallOpts{}
+
+				if thread := ctx.Thread(); thread != nil {
+					data := ConvertThreadToMessages(thread, ctx.Bot().FullName())
+					opts.Messages = data
+				}
+
+				response, err := service.CallMethod(
+					request.MethodName,
+					request.InputParams,
+					opts,
+				)
+
 				if err != nil {
 					switch {
 					case errors.Is(err, contracts.ErrMethodNotFound):
@@ -190,4 +204,24 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 			},
 		),
 	)
+}
+
+func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contracts.Messages {
+	msgs := make([]map[contracts.ChatRole]string, len(thread.Messages))
+
+	for i, msg := range thread.Messages {
+		slog.Info("message", "id", msg.ID, "sender", msg.Sender, "body", msg.Content.AsMessage().Body)
+		msgs[i] = map[contracts.ChatRole]string{}
+
+		body := msg.Content.AsMessage().Body
+
+		if msg.Sender.String() == botName {
+			msgs[i][contracts.AssistantRole] = body
+		} else {
+			msgs[i][contracts.UserRole] = body
+		}
+	}
+
+	slog.Info("messages", "count", len(msgs))
+	return msgs
 }

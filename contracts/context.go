@@ -45,6 +45,9 @@ type HandlerContext interface {
 
 	// JSON populates the outputs by marshaling and unmarshaling the provided data.
 	JSON(data any) error
+
+	Messages() Messages
+	SetMessages(messages Messages)
 }
 
 // Ensure DefaultHandlerContext implements HandlerContext.
@@ -55,15 +58,32 @@ type DefaultHandlerContext struct {
 	ctx     context.Context
 	inputs  map[string]Input
 	outputs map[string]Output
+
+	messages Messages
+}
+
+type HandlerContextOpts func(handlerContext HandlerContext)
+
+func WithMessages(messages Messages) HandlerContextOpts {
+	return func(handlerContext HandlerContext) {
+		handlerContext.SetMessages(messages)
+	}
 }
 
 // NewHandlerContext creates a new DefaultHandlerContext with the provided context, inputs, and outputs.
-func NewHandlerContext(ctx context.Context, inputs map[string]Input, outputs map[string]Output) HandlerContext {
-	return &DefaultHandlerContext{
-		ctx:     ctx,
-		inputs:  inputs,
-		outputs: outputs,
+func NewHandlerContext(ctx context.Context, inputs map[string]Input, outputs map[string]Output, opts ...HandlerContextOpts) HandlerContext {
+	handlerContext := &DefaultHandlerContext{
+		ctx:      ctx,
+		inputs:   inputs,
+		outputs:  outputs,
+		messages: Messages{},
 	}
+
+	for _, opt := range opts {
+		opt(handlerContext)
+	}
+
+	return handlerContext
 }
 
 func (h *DefaultHandlerContext) Context() context.Context {
@@ -183,4 +203,13 @@ func (h *DefaultHandlerContext) JSON(i any) error {
 	}
 
 	return nil
+}
+
+func (h *DefaultHandlerContext) Messages() Messages {
+
+	return h.messages
+}
+
+func (h *DefaultHandlerContext) SetMessages(messages Messages) {
+	h.messages = messages
 }

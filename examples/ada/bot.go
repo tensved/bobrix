@@ -51,10 +51,12 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 			return
 		}
 
-		answer, ok := r.GetString("answer")
+		answer, ok := r.GetString("text")
 		if !ok {
 			answer = "I don't know"
 		}
+
+		slog.Info("got response", "answer", answer)
 
 		err := ctx.TextAnswer(answer)
 

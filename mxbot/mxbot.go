@@ -2,12 +2,14 @@ package mxbot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"slices"
 	"time"
 )
 
@@ -35,6 +37,11 @@ type Bot interface {
 	StopTyping(ctx context.Context, roomID id.RoomID) error
 
 	Ping(ctx context.Context) error
+
+	IsThreadEnabled() bool
+
+	GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error)
+	GetThreadByEvent(ctx context.Context, evt *event.Event) (*MessagesThread, error)
 }
 
 // BotCredentials - credentials of the bot for Matrix
@@ -121,6 +128,8 @@ type DefaultBot struct {
 	eventHandlers []EventHandler
 
 	filters []Filter
+
+	isThreadEnabled bool // thread support
 
 	matrixClient *mautrix.Client
 
@@ -221,7 +230,7 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 		msg.SetContentURI(uploadResponse.ContentURI)
 	}
 
-	_, err := b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsEvent())
+	_, err := b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
 	}
@@ -234,28 +243,40 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 	syncer := b.matrixClient.Syncer.(*mautrix.DefaultSyncer)
 
 	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
-		if !b.checkFilters(evt) {
-			return
-		}
 
-		if err := b.StartTyping(ctx, evt.RoomID); err != nil {
-			b.logger.Error("failed to start typing", "err", err)
-		}
+		go func() {
 
-		defer func() {
-			if err := b.StopTyping(ctx, evt.RoomID); err != nil {
-				b.logger.Error("failed to stop typing", "err", err)
-			}
-		}()
-
-		eventContext := NewDefaultCtx(ctx, evt, b)
-
-		for _, handler := range b.eventHandlers {
-			err := handler.Handle(eventContext)
-			if err != nil {
+			if !b.checkFilters(evt) {
 				return
 			}
-		}
+
+			if err := b.StartTyping(ctx, evt.RoomID); err != nil {
+				b.logger.Error("failed to start typing", "err", err)
+			}
+
+			defer func() {
+				if err := b.StopTyping(ctx, evt.RoomID); err != nil {
+					b.logger.Error("failed to stop typing", "err", err)
+				}
+			}()
+
+			eventContext, err := NewDefaultCtx(ctx, evt, b)
+
+			defer eventContext.SetHandled()
+
+			if err != nil {
+				b.logger.Error("failed to create event context", "err", err)
+				return
+			}
+
+			for _, handler := range b.eventHandlers {
+				err := handler.Handle(eventContext)
+				if err != nil {
+					return
+				}
+			}
+
+		}()
 	})
 
 	// Start goroutine for syncing the events from the homeserver
@@ -381,4 +402,129 @@ func (b *DefaultBot) StopTyping(ctx context.Context, roomID id.RoomID) error {
 func (b *DefaultBot) Ping(ctx context.Context) error {
 	_, err := b.matrixClient.GetOwnDisplayName(ctx)
 	return err
+}
+
+func (b *DefaultBot) IsThreadEnabled() bool {
+	return b.isThreadEnabled
+}
+
+func (b *DefaultBot) GetThreadByEvent(ctx context.Context, evt *event.Event) (*MessagesThread, error) {
+
+	if evt == nil {
+		return nil, ErrNilEvent
+	}
+
+	rel := evt.Content.AsMessage().RelatesTo
+
+	if rel == nil || rel.Type != event.RelThread {
+		return nil, nil
+	}
+
+	roomID := evt.RoomID
+	parentEventID := rel.EventID
+
+	return b.GetThread(ctx, roomID, parentEventID)
+}
+
+const threadLimit = 120
+
+// GetThreadStory - получает полную историю всех сообщений
+func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error) {
+
+	msgs, err := b.matrixClient.Messages(
+		ctx,
+		roomID,
+		"",
+		"",
+		mautrix.DirectionBackward,
+		nil,
+		threadLimit,
+	)
+	if err != nil {
+		slog.Error("error get messages", "error", err)
+		return nil, err
+	}
+
+	data := make([]*event.Event, 0)
+
+	for _, evt := range msgs.Chunk {
+
+		msg, ok := GetFixedMessage(evt)
+		if !ok {
+			continue
+		}
+
+		evt.Content.Parsed = msg
+
+		if evt.ID == parentEventID {
+
+			data = append(data, evt)
+
+			rawContent := evt.Content.Raw
+
+			if answerEventID, ok := rawContent[AnswerToCustomField]; ok {
+
+				evtID := id.EventID(answerEventID.(string))
+
+				answerEvent, err := b.matrixClient.GetEvent(ctx, roomID, evtID)
+				if err != nil {
+					slog.Error("error get answer event", "error", err)
+					break
+				}
+
+				answerMsg, ok := GetFixedMessage(answerEvent)
+				if !ok {
+					continue
+				}
+
+				answerEvent.Content.Parsed = answerMsg
+
+				data = append(data, answerEvent)
+			}
+			break
+		}
+
+		rel := msg.RelatesTo
+
+		if rel == nil {
+			slog.Info("rel type nil", "event_id", evt.ID)
+			continue
+		}
+
+		if rel.Type != event.RelThread || rel.EventID != parentEventID {
+			slog.Info("rel type not thread", "event_id", evt.ID, "rel_event_id", rel.EventID, "rel_type", rel.Type)
+			continue
+		}
+
+		data = append(data, evt)
+	}
+
+	slog.Info("data size", "size", len(data))
+
+	slices.Reverse(data)
+
+	thread := &MessagesThread{
+		Messages: data,
+		ParentID: parentEventID,
+		RoomID:   roomID,
+	}
+
+	return thread, nil
+}
+
+func GetFixedMessage(evt *event.Event) (*event.MessageEventContent, bool) {
+	veryRaw := evt.Content.VeryRaw
+
+	if veryRaw == nil {
+		return nil, false
+	}
+
+	var msg *event.MessageEventContent
+
+	if err := json.Unmarshal(veryRaw, &msg); err != nil {
+		slog.Error("error unmarshal message", "error", err)
+		return nil, false
+	}
+
+	return msg, true
 }
