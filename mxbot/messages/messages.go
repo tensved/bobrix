@@ -8,98 +8,109 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type BaseMessage struct {
-	msgType      event.MessageType
-	text         string
-	contentURI   id.ContentURI
-	customFields map[string]any
-}
-
-func (bm *BaseMessage) Type() event.MessageType {
-	return bm.msgType
-}
-
-func (bm *BaseMessage) AsEvent(_ *event.RelatesTo) event.MessageEventContent {
-	slog.Info("AsEvent", "type", bm.Type())
-	return event.MessageEventContent{
-		MsgType: bm.Type(),
-		Body:    bm.text,
-	}
-}
-
-func (bm *BaseMessage) AsJSON() map[string]any {
-
-	evt := bm.AsEvent(nil)
-	b, err := json.Marshal(evt)
-	if err != nil {
-		panic(err)
-	}
-
-	var structMap map[string]any
-
-	if err := json.Unmarshal(b, &structMap); err != nil {
-		panic(err)
-	}
-
-	for key, value := range bm.customFields {
-		structMap[key] = value
-	}
-
-	return structMap
-}
-
-func (bm *BaseMessage) AsReqUpload() mautrix.ReqUploadMedia {
-	return mautrix.ReqUploadMedia{}
-}
-
-func (bm *BaseMessage) SetContentURI(contentURI id.ContentURI) {
-	bm.contentURI = contentURI
-}
-
-func (bm *BaseMessage) AddCustomFields(values ...any) {
-
-	if len(values) == 0 {
-		return
-	}
-
-	if len(values)%2 != 0 {
-		panic("invalid key-value pair: missing key or value")
-	}
-
-	for i := 0; i < len(values)-1; i += 2 {
-
-		key := values[i].(string)
-		val := values[i+1]
-
-		bm.customFields[key] = val
-	}
-
-}
-
-func NewBaseMessage(text string) BaseMessage {
-	return BaseMessage{
-		text:         text,
-		customFields: make(map[string]any),
-	}
-}
-
-// Message - message interface
-// should be implemented by all message types
-// It is used to send messages to the room by the bot
 type Message interface {
-	Type() event.MessageType                                // get message type
-	AsEvent(rel *event.RelatesTo) event.MessageEventContent // get event contentBytes
-	AsJSON() map[string]any                                 // get message as JSON
-	AsReqUpload() mautrix.ReqUploadMedia                    // get upload media request
-	SetContentURI(contentURI id.ContentURI)                 // set contentBytes URI after upload
+	Type() event.MessageType                // get message type
+	AsEvent() event.MessageEventContent     // get event contentBytes
+	AsJSON() map[string]any                 // get message as JSON
+	AsReqUpload() mautrix.ReqUploadMedia    // get upload media request
+	SetContentURI(contentURI id.ContentURI) // set contentBytes URI after upload
+
+	SetRelatesTo(rel *event.RelatesTo)
 
 	AddCustomFields(values ...any) // add custom fields to message. Required use as < key, value, ... >
 }
 
-type Options func(m Message)
+type FileInfo struct {
+	fileName string
+	mimeType string
 
-/*
-Есть стурктура BaseMessage
-Есть много функций, которые создают Message (NewText, NewAudio)
-т.е. самих структур TextMessage - нет.
-*/
+	contentBytes []byte
+	contentURI   id.ContentURI
+}
+
+var _ Message = (*BaseMessage)(nil)
+
+type BaseMessage struct {
+	msgType event.MessageType
+
+	rel *event.RelatesTo
+
+	text string
+
+	file *FileInfo
+
+	customFields map[string]any
+}
+
+func (m *BaseMessage) Type() event.MessageType {
+	return m.msgType
+}
+
+func (m *BaseMessage) AsEvent() event.MessageEventContent {
+	evt := event.MessageEventContent{
+		MsgType: m.Type(),
+		Body:    m.text,
+	}
+
+	if m.rel != nil {
+		evt.RelatesTo = m.rel
+	}
+
+	if m.file != nil {
+		evt.URL = m.file.contentURI.CUString()
+		evt.Info = &event.FileInfo{
+			MimeType: m.file.mimeType,
+		}
+	}
+
+	return evt
+}
+
+func (m *BaseMessage) AsJSON() map[string]any {
+	var result = make(map[string]any)
+
+	d, err := json.Marshal(m.AsEvent())
+	if err != nil {
+		slog.Error("failed to marshal message", "error", err)
+		return nil
+	}
+
+	err = json.Unmarshal(d, &result)
+	if err != nil {
+		slog.Error("failed to unmarshal message", "error", err)
+		return nil
+	}
+
+	if m.customFields != nil {
+		for k, v := range m.customFields {
+			result[k] = v
+		}
+	}
+
+	return result
+}
+
+func (m *BaseMessage) AsReqUpload() mautrix.ReqUploadMedia {
+	return mautrix.ReqUploadMedia{
+		ContentBytes: m.file.contentBytes,
+		ContentType:  m.file.mimeType,
+		FileName:     m.file.fileName,
+	}
+}
+
+func (m *BaseMessage) SetRelatesTo(rel *event.RelatesTo) {
+	m.rel = rel
+}
+
+func (m *BaseMessage) SetContentURI(contentURI id.ContentURI) {
+	m.file.contentURI = contentURI
+}
+
+func (m *BaseMessage) AddCustomFields(values ...any) {
+	if m.customFields == nil {
+		m.customFields = map[string]any{}
+	}
+	for i := 0; i < len(values); i += 2 {
+		m.customFields[values[i].(string)] = values[i+1]
+	}
+}

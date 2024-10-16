@@ -134,10 +134,12 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 					return nil
 				}
 
-				// not handle if it marked
-				if !ctx.CheckAndSetHandled() {
+				isHandled, unlocker := ctx.IsHandledWithUnlocker()
+				if isHandled {
 					return nil
 				}
+
+				defer unlocker()
 
 				botService, ok := bx.GetService(request.ServiceName)
 				if !ok {

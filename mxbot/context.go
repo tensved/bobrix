@@ -7,6 +7,11 @@ import (
 	"sync"
 )
 
+const (
+	BobrixCustomField   = "bobrix"
+	AnswerToCustomField = BobrixCustomField + ".answer_to"
+)
+
 // Ctx - context of the bot
 // provides access to the bot and event
 // and allows to set and get storage in the context
@@ -21,6 +26,7 @@ type Ctx interface {
 	Context() context.Context
 
 	Thread() *MessagesThread
+	SetThread(thread *MessagesThread)
 
 	Bot() Bot
 
@@ -29,14 +35,32 @@ type Ctx interface {
 
 	IsHandled() bool
 	SetHandled()
-	CheckAndSetHandled() bool
+	IsHandledWithUnlocker() (bool, func())
 }
 
 var _ Ctx = (*DefaultCtx)(nil)
 
 type handlesStatus struct {
 	isHandled bool
-	mx        *sync.Mutex
+	mx        *sync.RWMutex
+}
+
+func (s *handlesStatus) IsHandledWithUnlocker() (bool, func()) {
+	s.mx.RLock()
+
+	if s.isHandled {
+		s.mx.RUnlock()
+		return true, func() {}
+	}
+
+	return false, func() {
+		s.isHandled = true
+		s.mx.RUnlock()
+	}
+}
+
+func (c *DefaultCtx) IsHandledWithUnlocker() (bool, func()) {
+	return c.handlesStatus.IsHandledWithUnlocker()
 }
 
 func (s *handlesStatus) Check() bool {
@@ -44,15 +68,9 @@ func (s *handlesStatus) Check() bool {
 }
 
 func (s *handlesStatus) Set(status bool) {
-	s.isHandled = status
-}
-
-func (s *handlesStatus) Lock() {
 	s.mx.Lock()
-}
-
-func (s *handlesStatus) Unlock() {
-	s.mx.Unlock()
+	defer s.mx.Unlock()
+	s.isHandled = status
 }
 
 type DefaultCtx struct {
@@ -70,9 +88,14 @@ type DefaultCtx struct {
 
 func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) (*DefaultCtx, error) {
 
-	thread, err := bot.GetThreadByEvent(ctx, event)
-	if err != nil {
-		return nil, err
+	var thread *MessagesThread
+
+	if bot.IsThreadEnabled() {
+		var err error
+		thread, err = bot.GetThreadByEvent(ctx, event)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	defaultCtx := &DefaultCtx{
@@ -84,7 +107,7 @@ func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) (*DefaultCt
 		mx:      &sync.Mutex{},
 		handlesStatus: &handlesStatus{
 			isHandled: false,
-			mx:        &sync.Mutex{},
+			mx:        &sync.RWMutex{},
 		},
 	}
 
@@ -121,6 +144,21 @@ func (c *DefaultCtx) Bot() Bot {
 // it is a wrapper for bot.SendMessage
 // it returns an error if the message could not be sent
 func (c *DefaultCtx) Answer(msg messages.Message) error {
+
+	thread := c.thread
+	if thread != nil {
+		msg.SetRelatesTo(&event.RelatesTo{
+			Type:    event.RelThread,
+			EventID: thread.ParentID,
+			InReplyTo: &event.InReplyTo{
+				EventID: c.Event().ID,
+			},
+			IsFallingBack: true,
+		})
+	}
+
+	msg.AddCustomFields(AnswerToCustomField, c.event.ID)
+
 	return c.bot.SendMessage(c.Context(), c.event.RoomID, msg)
 }
 
@@ -142,19 +180,10 @@ func (c *DefaultCtx) SetHandled() {
 	c.handlesStatus.Set(true)
 }
 
-func (c *DefaultCtx) CheckAndSetHandled() bool {
-	c.handlesStatus.Lock()
-	defer c.handlesStatus.Unlock()
-
-	if c.IsHandled() {
-		return false
-	}
-
-	c.SetHandled()
-
-	return true
-}
-
 func (c *DefaultCtx) Thread() *MessagesThread {
 	return c.thread
+}
+
+func (c *DefaultCtx) SetThread(thread *MessagesThread) {
+	c.thread = thread
 }
