@@ -31,9 +31,10 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 
 	bobr := bobrix.NewBobrix(bot, bobrix.WithHealthcheck(bobrix.WithAutoSwitch()))
 
-	bobr.SetContractParser(bobrix.DefaultContractParser())
+	bobr.SetContractParser(bobrix.DefaultContractParser(bobr.Bot().UserID()))
 
 	bobr.SetContractParser(bobrix.AutoRequestParser(&bobrix.AutoParserOpts{
+		MXClient:    bot.Client(),
 		ServiceName: "ada",
 		MethodName:  "generate",
 		InputName:   "prompt",

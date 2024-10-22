@@ -24,13 +24,13 @@ type CallOpts struct {
 // CallMethod - calls the method with the given name
 // If the method does not exist, it returns an error
 // Otherwise, it calls the method and returns the result
-func (s *Service) CallMethod(methodName string, inputData map[string]any, opts ...CallOpts) (*MethodResponse, error) {
+func (s *Service) CallMethod(ctx context.Context, methodName string, inputData map[string]any, opts ...CallOpts) (*MethodResponse, error) {
 	method, ok := s.Methods[methodName]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrMethodNotFound, methodName)
 	}
 
-	return method.Call(inputData, opts...)
+	return method.CallWithContext(ctx, inputData, opts...)
 }
 
 func (s *Service) AddMethod(method *Method) {

@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/tensved/bobrix/mxbot"
+	"log/slog"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"regexp"
@@ -15,7 +17,7 @@ type ContractParser func(evt *event.Event) *ServiceRequest
 
 var (
 	regexpMessage = regexp.MustCompile(
-		`(@(?P<bot>\w+)\s+)*(-service:(?P<service>\w+)\s+)*(-method:(?P<method>\w+)\s)*(?P<inputs>.*)`,
+		`(-service:(?P<service>\w+)\s+)*(-method:(?P<method>\w+)\s)*(?P<inputs>.*)`,
 	)
 
 	regexpInputs = regexp.MustCompile(`-(\w+):"((?:\\"|[^"])*)"`)
@@ -25,11 +27,11 @@ var (
 // it parses message text and extracts bot name, service name and method name
 // it used specific regular expression for parsing
 // it returns nil if message doesn't match the pattern
-
 // message pattern example: @{botname} -service:{servicename} -method:{methodname} -{input1}:"{inputvalue1}" -{input2}:"{inputvalue2}"
-func DefaultContractParser() ContractParser {
+func DefaultContractParser(botUserID id.UserID) ContractParser {
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
+		mxbot.FilterTagMe(botUserID),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
@@ -108,6 +110,7 @@ func AudioMessageContractParser(opts *AudioMessageParserOpts) ContractParser {
 
 		audioData, err := downloadAudioMessage(opts.Downloader, evt)
 		if err != nil {
+			slog.Error("failed to download audio message", "error", err)
 			return nil
 		}
 
@@ -128,6 +131,7 @@ type Downloader interface {
 }
 
 type AutoParserOpts struct {
+	MXClient    *mautrix.Client
 	ServiceName string
 	MethodName  string
 	InputName   string
@@ -140,6 +144,7 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
+		mxbot.FilterTageMeOrPrivate(opts.MXClient),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
@@ -185,6 +190,7 @@ func ImageMessageContractParser(opts *ImageMessageParserOpts) func(evt *event.Ev
 
 		imageData, err := downloadImageMessage(opts.Downloader, evt)
 		if err != nil {
+			slog.Error("failed to download image message", "error", err)
 			return nil
 		}
 

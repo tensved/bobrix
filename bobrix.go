@@ -176,6 +176,7 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				}
 
 				response, err := service.CallMethod(
+					ctx.Context(),
 					request.MethodName,
 					request.InputParams,
 					opts,

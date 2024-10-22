@@ -3,6 +3,7 @@ package mxbot
 import (
 	"context"
 	"github.com/tensved/bobrix/mxbot/messages"
+	"log/slog"
 	"maunium.net/go/mautrix/event"
 	"sync"
 )
@@ -86,6 +87,29 @@ type DefaultCtx struct {
 	handlesStatus *handlesStatus
 }
 
+var MetadataKeyContext = struct{}{}
+
+func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) context.Context {
+	metadata := map[string]any{
+		"event": evt,
+	}
+
+	if msg := evt.Content.AsMessage(); msg != nil {
+		if rel := msg.RelatesTo; rel != nil {
+			metadata["tread_id"] = rel.EventID
+
+			mainEvent, err := bot.Client().GetEvent(ctx, evt.RoomID, rel.EventID)
+			if err != nil {
+				slog.Error("error get main event", "error", err)
+			}
+
+			metadata["thread.answer_to"] = mainEvent.Content.Raw[AnswerToCustomField]
+		}
+	}
+
+	return context.WithValue(ctx, MetadataKeyContext, metadata)
+}
+
 func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) (*DefaultCtx, error) {
 
 	var thread *MessagesThread
@@ -97,6 +121,8 @@ func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) (*DefaultCt
 			return nil, err
 		}
 	}
+
+	ctx = injectMetadataInContext(ctx, event, bot)
 
 	defaultCtx := &DefaultCtx{
 		context: ctx,

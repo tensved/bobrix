@@ -16,6 +16,7 @@ import (
 type Bot interface {
 	Name() string
 	FullName() string // get full name with servername (e.g. @username:servername)
+	UserID() id.UserID
 
 	EventHandlers() []EventHandler
 	AddEventHandler(handler EventHandler)
@@ -147,6 +148,10 @@ func (b *DefaultBot) Name() string {
 
 func (b *DefaultBot) FullName() string {
 	return b.Client().UserID.String()
+}
+
+func (b *DefaultBot) UserID() id.UserID {
+	return b.Client().UserID
 }
 
 func (b *DefaultBot) EventHandlers() []EventHandler {

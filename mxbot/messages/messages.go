@@ -127,7 +127,7 @@ func (m *BaseMessage) SetContentURI(contentURI id.ContentURI) {
 
 func (m *BaseMessage) AddCustomFields(values ...any) {
 	if m.customFields == nil {
-		m.customFields = map[string]any{}
+		m.customFields = make(map[string]any)
 	}
 	for i := 0; i < len(values); i += 2 {
 		m.customFields[values[i].(string)] = values[i+1]

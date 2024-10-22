@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 	"slices"
 	"strings"
 	"time"
@@ -94,13 +95,30 @@ func FilterPrivateRoom(cl *mautrix.Client) Filter {
 	}
 }
 
-func FilterTagMe(username string) Filter {
+func FilterTagMe(userID id.UserID) Filter {
 
 	return func(evt *event.Event) bool {
 
-		msg := evt.Content.AsMessage().Body
+		mentions := evt.Content.AsMessage().Mentions
 
-		return strings.Contains(msg, username)
+		if mentions == nil {
+			return false
+		}
+
+		for _, mention := range mentions.UserIDs {
+			if mention == userID {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+func FilterTageMeOrPrivate(cl *mautrix.Client) Filter {
+
+	return func(evt *event.Event) bool {
+		return FilterTagMe(cl.UserID)(evt) || FilterPrivateRoom(cl)(evt)
 	}
 }
 
