@@ -10,14 +10,19 @@ import (
 // Bots can be attached to it (see Bobrix).
 // It is also responsible for launching all bots
 type Engine struct {
-	bots []*Bobrix
-	mx   *sync.RWMutex
+	bots     []*Bobrix
+	services []*BobrixService
+	mx       *sync.RWMutex
+
+	logger *slog.Logger
 }
 
 func NewEngine() *Engine {
 	return &Engine{
-		bots: make([]*Bobrix, 0),
-		mx:   &sync.RWMutex{},
+		bots:     make([]*Bobrix, 0),
+		services: make([]*BobrixService, 0),
+		mx:       &sync.RWMutex{},
+		logger:   slog.Default(),
 	}
 }
 
@@ -27,13 +32,19 @@ func (e *Engine) ConnectBot(bot *Bobrix) {
 	e.mx.Unlock()
 }
 
+func (e *Engine) ConnectService(service *BobrixService) {
+	e.mx.Lock()
+	e.services = append(e.services, service)
+	e.mx.Unlock()
+}
+
 func (e *Engine) Run(ctx context.Context) error {
 
 	for _, bot := range e.bots {
 		go func(bot *Bobrix) {
 			ctx := context.Background()
 			if err := bot.Run(ctx); err != nil {
-				slog.Error("failed to run bot", "error", err)
+				e.logger.Error("failed to run bot", "error", err)
 			}
 		}(bot)
 	}
@@ -50,13 +61,52 @@ func (e *Engine) Stop(ctx context.Context) error {
 		go func(bot *Bobrix) {
 			ctx := context.Background()
 			if err := bot.Stop(ctx); err != nil {
-				slog.Error("failed to stop bot", "error", err)
+				e.logger.Error("failed to stop bot", "error", err)
 			}
 			wg.Done()
 		}(bot)
 	}
 
 	wg.Wait()
+
+	return nil
+}
+
+func (e *Engine) Bots() []*Bobrix {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	return e.bots
+}
+
+func (e *Engine) GetBot(name string) *Bobrix {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	for _, bot := range e.bots {
+		if bot.Name() == name {
+			return bot
+		}
+	}
+	return nil
+}
+
+func (e *Engine) Services() []*BobrixService {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	return e.services
+}
+
+func (e *Engine) GetService(name string) *BobrixService {
+	e.mx.RLock()
+	defer e.mx.RUnlock()
+
+	for _, service := range e.services {
+		if service.Service.Name == name {
+			return service
+		}
+	}
 
 	return nil
 }

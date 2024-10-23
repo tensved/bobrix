@@ -1,24 +1,48 @@
 package mxbot
 
 import (
-	"context"
 	"log/slog"
 	"maunium.net/go/mautrix/event"
 )
 
-func AutoJoinRoomHandler(bot Bot) EventHandler {
+type JoinRoomParams struct {
+	PreJoinHook   func(ctx Ctx) error
+	AfterJoinHook func(ctx Ctx) error
+}
+
+// AutoJoinRoomHandler - join the room on invite automatically
+// You can pass JoinRoomParams to modify the behavior of the handler
+// Use PreJoinHook to modify the behavior before joining the room
+// If PreJoinHook returns an error, the join is aborted
+// Use AfterJoinHook to modify the behavior after joining the room
+func AutoJoinRoomHandler(bot Bot, params ...JoinRoomParams) EventHandler {
 	return NewStateMemberHandler(func(ctx Ctx) error {
 		evt := ctx.Event()
 
-		if evt.Content.AsMember().Membership == event.MembershipInvite {
-			err := bot.JoinRoom(context.TODO(), evt.RoomID)
-			if err != nil {
+		p := JoinRoomParams{}
+
+		if len(params) > 0 {
+			p = params[0]
+		}
+
+		if p.PreJoinHook != nil {
+			if err := p.PreJoinHook(ctx); err != nil {
+				return err
+			}
+		}
+
+		if err := bot.JoinRoom(ctx.Context(), evt.RoomID); err != nil {
+			return err
+		}
+
+		if p.AfterJoinHook != nil {
+			if err := p.AfterJoinHook(ctx); err != nil {
 				return err
 			}
 		}
 
 		return nil
-	})
+	}, FilterInviteMe(bot))
 }
 
 var _ EventHandler = (*LoggerHandler)(nil)
@@ -42,11 +66,14 @@ func NewLoggerHandler(botName string, log ...*slog.Logger) *LoggerHandler {
 }
 
 func (h *LoggerHandler) Handle(ctx Ctx) error {
-	sender := ctx.Event().Sender
-	eventType := ctx.Event().Type
-	content := ctx.Event().Content
+	evt := ctx.Event()
 
-	h.log.Info("new event", "sender", sender, "type", eventType, "content", content)
+	id := evt.ID
+	sender := evt.Sender
+	eventType := evt.Type
+	content := evt.Content
+
+	h.log.Info("new event", "id", id, "sender", sender, "type", eventType, "content", content.Raw)
 	return nil
 }
 

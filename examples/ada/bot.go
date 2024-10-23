@@ -25,23 +25,43 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 		mxbot.AutoJoinRoomHandler(bot),
 	)
 
-	bobr := bobrix.NewBobrix(bot)
+	bot.AddEventHandler(
+		mxbot.NewLoggerHandler("ada"),
+	)
 
-	bobr.SetContractParser(bobrix.DefaultContractParser())
+	bobr := bobrix.NewBobrix(bot, bobrix.WithHealthcheck(bobrix.WithAutoSwitch()))
+
+	bobr.SetContractParser(bobrix.DefaultContractParser(bobr.Bot().UserID()))
+
+	bobr.SetContractParser(bobrix.AutoRequestParser(&bobrix.AutoParserOpts{
+		MXClient:    bot.Client(),
+		ServiceName: "ada",
+		MethodName:  "generate",
+		InputName:   "prompt",
+	}))
 
 	bobr.ConnectService(NewADAService("hilltwinssl.singularitynet.io"), func(ctx mxbot.Ctx, r *contracts.MethodResponse) {
 
-		answer, ok := r.Data["answer"].(string)
+		if r.Err != nil {
+			slog.Error("failed to process request", "error", r.Err)
+
+			if err := ctx.TextAnswer("error: " + r.Err.Error()); err != nil {
+				slog.Error("failed to send message", "error", err)
+			}
+
+			return
+		}
+
+		answer, ok := r.GetString("text")
 		if !ok {
 			answer = "I don't know"
 		}
 
-		err := ctx.TextAnswer(answer)
+		slog.Info("got response", "answer", answer)
 
-		if err != nil {
+		if err := ctx.TextAnswer(answer); err != nil {
 			slog.Error("failed to send message", "error", err)
 		}
-
 	})
 
 	return bobr, nil

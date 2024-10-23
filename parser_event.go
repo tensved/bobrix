@@ -4,42 +4,61 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/tensved/bobrix/mxbot"
 	"log/slog"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"regexp"
 	"slices"
 )
 
-func DefaultContractParser() func(evt *event.Event) *ServiceRequest {
-	reMsg := regexp.MustCompile(
-		`(@(?P<bot>\w+)\s+)*(-service:(?P<service>\w+)\s+)*(-method:(?P<method>\w+)\s)*(?P<inputs>.*)`,
+type ContractParser func(evt *event.Event) *ServiceRequest
+
+var (
+	regexpMessage = regexp.MustCompile(
+		`(-service:(?P<service>\w+)\s+)*(-method:(?P<method>\w+)\s)*(?P<inputs>.*)`,
 	)
 
-	reInputs := regexp.MustCompile(`-(\w+):"((?:\\"|[^"])*)"`)
+	regexpInputs = regexp.MustCompile(`-(\w+):"((?:\\"|[^"])*)"`)
+)
+
+// DefaultContractParser - default contract parser
+// it parses message text and extracts bot name, service name and method name
+// it used specific regular expression for parsing
+// it returns nil if message doesn't match the pattern
+// message pattern example: @{botname} -service:{servicename} -method:{methodname} -{input1}:"{inputvalue1}" -{input2}:"{inputvalue2}"
+func DefaultContractParser(botUserID id.UserID) ContractParser {
+	filters := []mxbot.Filter{
+		mxbot.FilterMessageText(),
+		mxbot.FilterTagMe(botUserID),
+	}
 
 	return func(evt *event.Event) *ServiceRequest {
 
-		if evt.Type != event.EventMessage {
-			return nil
+		for _, filter := range filters {
+			if !filter(evt) {
+
+				return nil
+			}
 		}
 
 		eventMsg := evt.Content.AsMessage().Body
 
-		match := reMsg.FindStringSubmatch(eventMsg)
+		match := regexpMessage.FindStringSubmatch(eventMsg)
 
 		if len(match) == 0 {
 			return nil
 		}
 
 		groups := make(map[string]string)
-		for i, name := range reMsg.SubexpNames() {
+		for i, name := range regexpMessage.SubexpNames() {
 			if i != 0 && name != "" && match[i] != "" {
 				groups[name] = match[i]
 			}
 		}
 
-		inputs := reInputs.FindAllStringSubmatch(groups["inputs"], -1)
+		inputs := regexpInputs.FindAllStringSubmatch(groups["inputs"], -1)
 
 		inputsData := make(map[string]any)
 
@@ -72,23 +91,26 @@ type AudioMessageParserOpts struct {
 // AudioMessageContractParser - audio message contract parser
 // It is required to specify strictly the name of the service and method, as well as the name for Input,
 // because when sending a voice message there is no possibility to specify parameters by text
-func AudioMessageContractParser(opts *AudioMessageParserOpts) func(evt *event.Event) *ServiceRequest {
+func AudioMessageContractParser(opts *AudioMessageParserOpts) ContractParser {
 	if opts == nil {
 		return nil
 	}
 
+	filters := []mxbot.Filter{
+		mxbot.FilterMessageAudio(),
+	}
+
 	return func(evt *event.Event) *ServiceRequest {
-		if evt.Type != event.EventMessage {
-			return nil
+
+		for _, filter := range filters {
+			if !filter(evt) {
+				return nil
+			}
 		}
 
-		if evt.Content.AsMessage().MsgType != event.MsgAudio {
-			return nil
-		}
-
-		audioData, err := handleAudioMessage(opts.Downloader, evt)
+		audioData, err := downloadAudioMessage(opts.Downloader, evt)
 		if err != nil {
-			slog.Error("failed to handle audio message", "error", err)
+			slog.Error("failed to download audio message", "error", err)
 			return nil
 		}
 
@@ -108,41 +130,8 @@ type Downloader interface {
 	Download(ctx context.Context, uri id.ContentURI) ([]byte, error)
 }
 
-func handleAudioMessage(bot Downloader, evt *event.Event) (string, error) {
-	ctx := context.Background()
-
-	var audioData string
-
-	allowedMimeTypes := []string{
-		"audio/webm",
-		"audio/ogg",
-		"audio/mpeg",
-	}
-
-	info := evt.Content.Raw["info"].(map[string]interface{})
-	mimeType := info["mimetype"].(string)
-	if slices.Contains(allowedMimeTypes, mimeType) {
-		mxcURI, err := id.ContentURIString(evt.Content.Raw["url"].(string)).Parse()
-		if err != nil {
-			return "", fmt.Errorf("%w: %s", ErrParseMXCURI, err)
-		}
-
-		data, err := bot.Download(ctx, mxcURI)
-		if err != nil {
-			return "", fmt.Errorf("%w: %s", ErrDownloadFile, err)
-		}
-
-		encoded := base64.StdEncoding.EncodeToString(data)
-
-		audioData = encoded
-	} else {
-		return "", fmt.Errorf("%w: %s", ErrInappropriateMimeType, mimeType)
-	}
-
-	return audioData, nil
-}
-
 type AutoParserOpts struct {
+	MXClient    *mautrix.Client
 	ServiceName string
 	MethodName  string
 	InputName   string
@@ -151,11 +140,18 @@ type AutoParserOpts struct {
 // AutoRequestParser - auto request parser
 // It is convenient to use it in cases when you need to handle situations
 // when a user sends a message that should be sent immediately by a request
-func AutoRequestParser(opts *AutoParserOpts) func(evt *event.Event) *ServiceRequest {
+func AutoRequestParser(opts *AutoParserOpts) ContractParser {
+
+	filters := []mxbot.Filter{
+		mxbot.FilterMessageText(),
+		mxbot.FilterTageMeOrPrivate(opts.MXClient),
+	}
 
 	return func(evt *event.Event) *ServiceRequest {
-		if evt.Type != event.EventMessage {
-			return nil
+		for _, filter := range filters {
+			if !filter(evt) {
+				return nil
+			}
 		}
 
 		msg := evt.Content.AsMessage().Body
@@ -169,4 +165,96 @@ func AutoRequestParser(opts *AutoParserOpts) func(evt *event.Event) *ServiceRequ
 			InputParams: inputData,
 		}
 	}
+}
+
+type ImageMessageParserOpts struct {
+	Downloader  mxbot.Bot
+	ServiceName string
+	MethodName  string
+	InputName   string
+}
+
+// ImageMessageContractParser - image message contract parser
+// It is required to specify strictly the name of the service and method, as well as the name for Input
+// because when sending an image there is no possibility to specify parameters by text
+func ImageMessageContractParser(opts *ImageMessageParserOpts) func(evt *event.Event) *ServiceRequest {
+
+	return func(evt *event.Event) *ServiceRequest {
+		if evt.Type != event.EventMessage {
+			return nil
+		}
+
+		if evt.Content.AsMessage().MsgType != event.MsgImage {
+			return nil
+		}
+
+		imageData, err := downloadImageMessage(opts.Downloader, evt)
+		if err != nil {
+			slog.Error("failed to download image message", "error", err)
+			return nil
+		}
+
+		inputData := make(map[string]any, 1)
+
+		inputData[opts.InputName] = imageData
+
+		return &ServiceRequest{
+			ServiceName: opts.ServiceName,
+			MethodName:  opts.MethodName,
+			InputParams: inputData,
+		}
+	}
+}
+
+// downloadAudioMessage - download audio message
+// It returns base64 encoded audio data
+func downloadAudioMessage(bot Downloader, evt *event.Event) (string, error) {
+	allowedMimeTypes := []string{
+		"audio/webm",
+		"audio/ogg",
+		"audio/mpeg",
+	}
+
+	return downloadMediaMessage(bot, evt, allowedMimeTypes)
+}
+
+// downloadImageMessage - download image message
+// It returns base64 encoded image data
+func downloadImageMessage(bot Downloader, evt *event.Event) (string, error) {
+	allowedMimeTypes := []string{
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+	}
+
+	return downloadMediaMessage(bot, evt, allowedMimeTypes)
+}
+
+// downloadMediaMessage - download media message
+// It returns base64 encoded media data and checks if the mime type is allowed
+func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []string) (string, error) {
+
+	ctx := context.Background()
+
+	info := evt.Content.Raw["info"].(map[string]interface{})
+	mimeType := info["mimetype"].(string)
+
+	if !slices.Contains(allowedMimeTypes, mimeType) {
+		return "", fmt.Errorf("%w: %s", ErrInappropriateMimeType, mimeType)
+	}
+
+	mxcURI, err := id.ContentURIString(evt.Content.Raw["url"].(string)).Parse()
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", ErrParseMXCURI, err)
+	}
+
+	data, err := bot.Download(ctx, mxcURI)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", ErrDownloadFile, err)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	return encoded, nil
+
 }

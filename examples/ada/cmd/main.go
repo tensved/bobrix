@@ -29,9 +29,25 @@ func main() {
 
 	ctx := context.Background()
 
-	if err := engine.Run(ctx); err != nil {
-		panic(err)
-	}
+	go func() {
+		if err := engine.Run(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	go func() {
+		ada := engine.Bots()[0]
+
+		slog.Info("starting sync")
+
+		sub := ada.Healthchecker.Subscribe()
+
+		for data := range sub.Sync() {
+
+			slog.Debug("healthcheck", "data", data)
+		}
+
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)

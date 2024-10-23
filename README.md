@@ -62,9 +62,25 @@ func main() {
 
 	ctx := context.Background()
 
-	if err := engine.Run(ctx); err != nil {
-		panic(err)
-	}
+	go func() {
+		if err := engine.Run(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	go func() {
+		ada := engine.Bots()[0]
+
+		slog.Info("starting sync")
+
+		sub := ada.Healthchecker.Subscribe()
+
+		for data := range sub.Sync() {
+
+			slog.Debug("healthcheck", "data", data)
+		}
+
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
@@ -91,13 +107,8 @@ import (
 	"log/slog"
 )
 
-func NewAdaBot(username string, password string, homeServerURL string) (*bobrix.Bobrix, error) {
-	bot, err := mxbot.NewDefaultBot("ada",
-		&mxbot.BotCredentials{
-			Username:      username,
-			Password:      password,
-			HomeServerURL: homeServerURL,
-		})
+func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
+	bot, err := mxbot.NewDefaultBot("ada", credentials)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +117,7 @@ func NewAdaBot(username string, password string, homeServerURL string) (*bobrix.
 		"ping",
 		func(c mxbot.CommandCtx) error {
 
-			return c.Answer("pong")
+			return c.TextAnswer("pong")
 		}),
 	)
 
@@ -114,28 +125,46 @@ func NewAdaBot(username string, password string, homeServerURL string) (*bobrix.
 		mxbot.AutoJoinRoomHandler(bot),
 	)
 
-	bobr := bobrix.NewBobrix(bot)
+	bot.AddEventHandler(
+		mxbot.NewLoggerHandler("ada"),
+	)
+
+	bobr := bobrix.NewBobrix(bot, bobrix.WithHealthcheck(bobrix.WithAutoSwitch()))
 
 	bobr.SetContractParser(bobrix.DefaultContractParser())
 
+	bobr.SetContractParser(bobrix.AutoRequestParser(&bobrix.AutoParserOpts{
+		ServiceName: "ada",
+		MethodName:  "generate",
+		InputName:   "prompt",
+	}))
+
 	bobr.ConnectService(NewADAService("hilltwinssl.singularitynet.io"), func(ctx mxbot.Ctx, r *contracts.MethodResponse) {
 
-		answer, ok := r.Data["answer"].(string)
+		if r.Err != nil {
+			slog.Error("failed to process request", "error", r.Err)
+
+			if err := ctx.TextAnswer("error: " + r.Err.Error()); err != nil {
+				slog.Error("failed to send message", "error", err)
+			}
+
+			return
+		}
+
+		answer, ok := r.GetString("answer")
 		if !ok {
 			answer = "I don't know"
 		}
 
-		err := ctx.Answer(answer)
+		err := ctx.TextAnswer(answer)
 
 		if err != nil {
 			slog.Error("failed to send message", "error", err)
 		}
-
 	})
 
 	return bobr, nil
 }
-
 ```
 
 Basic example of Service Description:
@@ -161,14 +190,23 @@ func NewADAService(adaHost string) *contracts.Service {
 			"generate": {
 				Name:        "generate",
 				Description: "Generate text using Ada's language model.",
-				Inputs: []*contracts.Input{
+				Inputs: []contracts.Input{
 					{
 						Name:        "prompt",
 						Description: "The prompt to generate text from.",
-						IsRequired:  true,
+						Type:        "text",
+					},
+					{
+						Name:         "response_type",
+						Type:         "text",
+						DefaultValue: "text",
+					},
+					{
+						Name: "audio",
+						Type: "audio",
 					},
 				},
-				Outputs: []*contracts.Output{
+				Outputs: []contracts.Output{
 					{
 						Name:        "text",
 						Description: "The generated text.",
@@ -177,9 +215,11 @@ func NewADAService(adaHost string) *contracts.Service {
 				Handler: NewADAHandler(adaHost),
 			},
 		},
+		Pinger: contracts.NewWSPinger(
+			contracts.WSOptions{Host: adaHost, Path: "/", Schema: "wss"},
+		),
 	}
 }
-
 ```
 *For a more detailed description see [Service Example](examples/ada/service.go)*
 
