@@ -1,3 +1,6 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/tensved/bobrix.svg)](https://pkg.go.dev/github.com/tensved/bobrix)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tensved/bobrix)](https://goreportcard.com/report/github.com/tensved/bobrix)
+
 # BOBRIX (Bot Bridge Matrix) -  Service Bridge for Matrix Bots
 
 ### Overview
