@@ -87,7 +87,9 @@ type DefaultCtx struct {
 	handlesStatus *handlesStatus
 }
 
-var MetadataKeyContext = struct{}{}
+type MetadataKey struct{}
+
+var MetadataKeyContext = MetadataKey{}
 
 func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) context.Context {
 	metadata := map[string]any{

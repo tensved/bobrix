@@ -111,9 +111,9 @@ func (bx *Bobrix) Bot() mxbot.Bot {
 }
 
 type ServiceRequest struct {
-	ServiceName string
-	MethodName  string
-	InputParams map[string]any
+	ServiceName string         `json:"service"`
+	MethodName  string         `json:"method"`
+	InputParams map[string]any `json:"inputs"`
 }
 
 type ServiceHandle func(evt *event.Event) *ServiceRequest

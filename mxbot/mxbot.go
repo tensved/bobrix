@@ -255,15 +255,13 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 				return
 			}
 
-			if err := b.StartTyping(ctx, evt.RoomID); err != nil {
-				b.logger.Error("failed to start typing", "err", err)
-			}
+			cancelTyping, err := b.LoopTyping(ctx, evt.RoomID)
 
-			defer func() {
-				if err := b.StopTyping(ctx, evt.RoomID); err != nil {
-					b.logger.Error("failed to stop typing", "err", err)
-				}
-			}()
+			if err != nil {
+				b.logger.Warn("failed to start typing", "err", err)
+			} else {
+				defer cancelTyping()
+			}
 
 			eventContext, err := NewDefaultCtx(ctx, evt, b)
 
@@ -387,6 +385,45 @@ func (b *DefaultBot) checkFilters(evt *event.Event) bool {
 		}
 	}
 	return true
+}
+
+// LoopTyping - Starts and stops typing on the room. Typing is sent every typingTimeout
+// it will be stopped if the context is cancelled or if an error occurs
+// it returns a function that can be used to stop the typing
+func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
+
+	ticker := time.NewTicker(b.typingTimeout)
+
+	err = b.StartTyping(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+
+	cancel := make(chan struct{})
+
+	go func(c <-chan struct{}) {
+		for {
+			select {
+			case <-ticker.C:
+				if err := b.StartTyping(ctx, roomID); err != nil {
+					b.logger.Error("failed to stop typing", "err", err)
+				}
+
+			case <-c:
+				if err := b.StopTyping(ctx, roomID); err != nil {
+					b.logger.Error("failed to stop typing", "err", err)
+				}
+			}
+		}
+	}(cancel)
+
+	return func() {
+		cancel <- struct{}{}
+		ticker.Stop()
+
+		close(cancel)
+	}, nil
+
 }
 
 // StartTyping - Starts typing on the room
