@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"slices"
 	"strings"
 	"time"
@@ -52,6 +51,7 @@ func FilterAfterStart(bot Bot, opts ...FilterAfterStartOptions) Filter {
 	}
 }
 
+// FilterNotInRoom - filter for messages that bot is not in the room
 func FilterNotInRoom(bot Bot) Filter {
 	return func(evt *event.Event) bool {
 
@@ -82,10 +82,12 @@ func FilterCommand(command *Command) Filter {
 	}
 }
 
-func FilterPrivateRoom(cl *mautrix.Client) Filter {
+// FilterPrivateRoom - filter for private rooms (there are only two people in the room: bot + user)
+// return true if room is private
+func FilterPrivateRoom(bot Bot) Filter {
 	return func(evt *event.Event) bool {
 
-		resp, err := cl.JoinedMembers(context.Background(), evt.RoomID)
+		resp, err := bot.Client().JoinedMembers(context.Background(), evt.RoomID)
 		if err != nil {
 			slog.Error("cannot get room joined members", "err", err, "event_id", evt.ID)
 			return false
@@ -95,7 +97,9 @@ func FilterPrivateRoom(cl *mautrix.Client) Filter {
 	}
 }
 
-func FilterTagMe(userID id.UserID) Filter {
+// FilterTagMe - filter for messages that bot is tagged
+// return true if bot is tagged
+func FilterTagMe(bot Bot) Filter {
 
 	return func(evt *event.Event) bool {
 
@@ -106,7 +110,7 @@ func FilterTagMe(userID id.UserID) Filter {
 		}
 
 		for _, mention := range mentions.UserIDs {
-			if mention == userID {
+			if mention == bot.UserID() {
 				return true
 			}
 		}
@@ -115,10 +119,11 @@ func FilterTagMe(userID id.UserID) Filter {
 	}
 }
 
-func FilterTageMeOrPrivate(cl *mautrix.Client) Filter {
-
+// FilterTageMeOrPrivate - filter for messages that are tagged or sent in a private room
+// return true if message is tagged or sent in a private room
+func FilterTageMeOrPrivate(bot Bot) Filter {
 	return func(evt *event.Event) bool {
-		return FilterTagMe(cl.UserID)(evt) || FilterPrivateRoom(cl)(evt)
+		return FilterTagMe(bot)(evt) || FilterPrivateRoom(bot)(evt)
 	}
 }
 
@@ -184,16 +189,22 @@ func FilterMessageFile() Filter {
 	return FilterMessageTypes(event.MsgFile)
 }
 
+// FilterMembershipEvent - filter for membership events
+// check if message type is event.Membership
 func FilterMembershipEvent(membership event.Membership) Filter {
 	return func(evt *event.Event) bool {
 		return evt.Content.AsMember().Membership == membership
 	}
 }
 
+// FilterMembershipInvite - filter for invite messages
+// check if message type is event.MembershipInvite
 func FilterMembershipInvite() Filter {
 	return FilterMembershipEvent(event.MembershipInvite)
 }
 
+// FilterInviteMe - filter for invite messages that are sent to the bot
+// check if message type is event.MembershipInvite and state key is the bot's full name
 func FilterInviteMe(bot Bot) Filter {
 	inviteEventFilter := FilterMembershipInvite()
 	return func(evt *event.Event) bool {

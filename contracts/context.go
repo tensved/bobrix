@@ -46,7 +46,10 @@ type HandlerContext interface {
 	// JSON populates the outputs by marshaling and unmarshaling the provided data.
 	JSON(data any) error
 
+	// Messages returns all messages in the context.
 	Messages() Messages
+
+	// SetMessages sets the messages in the context.
 	SetMessages(messages Messages)
 }
 
@@ -64,6 +67,7 @@ type DefaultHandlerContext struct {
 
 type HandlerContextOpts func(handlerContext HandlerContext)
 
+// WithMessages returns a HandlerContextOpts that sets the messages in the handler context.
 func WithMessages(messages Messages) HandlerContextOpts {
 	return func(handlerContext HandlerContext) {
 		handlerContext.SetMessages(messages)

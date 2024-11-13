@@ -1,5 +1,10 @@
 package contracts
 
+import (
+	"fmt"
+	"strconv"
+)
+
 // IOType represents the type of input or output in a method (e.g., text, audio, image).
 type IOType string
 
@@ -27,7 +32,25 @@ type Input struct {
 
 // SetValue sets the internal value of the input.
 func (i *Input) SetValue(value any) {
-	i.value = value
+
+	switch i.Type {
+	case IOTypeNumber:
+		float, err := strconv.ParseFloat(fmt.Sprintf("%v", value), 64)
+		if err != nil {
+			panic(err)
+		}
+
+		i.value = float
+	case IOTypeBoolean:
+		boolValue, err := strconv.ParseBool(fmt.Sprintf("%v", value))
+		if err != nil {
+			panic(err)
+		}
+
+		i.value = boolValue
+	default:
+		i.value = value
+	}
 }
 
 // Value returns the internal value of the input.

@@ -3,10 +3,10 @@ package bobrix
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/tensved/bobrix/mxbot"
 	"log/slog"
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"regexp"
@@ -23,15 +23,67 @@ var (
 	regexpInputs = regexp.MustCompile(`-(\w+):"((?:\\"|[^"])*)"`)
 )
 
+const BobrixPromptTag = "bobrix.prompt"
+
+// BobrixContractParser - master contract parser
+// It is used for parsing a request from the bot
+// Request should be in the form of a JSON object with the following structure (ServiceRequest)
+// And it should have a tag "bobrix.prompt" in event.Content
+func BobrixContractParser(bot mxbot.Bot) ContractParser {
+	filters := []mxbot.Filter{
+		mxbot.FilterMessageText(),
+		mxbot.FilterTagMe(bot),
+	}
+
+	return func(evt *event.Event) *ServiceRequest {
+		for _, filter := range filters {
+			if !filter(evt) {
+				return nil
+			}
+		}
+
+		if evt.Content.Raw == nil {
+			slog.Error("raw message is nil", "event", evt)
+			return nil
+		}
+
+		requestData, exists := evt.Content.Raw[BobrixPromptTag]
+		if !exists {
+			slog.Error("missing request data", "event", evt)
+			return nil
+		}
+
+		requestMap, valid := requestData.(map[string]any)
+		if !valid {
+			slog.Error("request data is not a valid map", "event", evt)
+			return nil
+		}
+
+		reqJSON, err := json.Marshal(requestMap)
+		if err != nil {
+			slog.Error("failed to marshal request data", "error", err)
+			return nil
+		}
+
+		var serviceRequest ServiceRequest
+		if err := json.Unmarshal(reqJSON, &serviceRequest); err != nil {
+			slog.Error("failed to unmarshal request data", "error", err)
+			return nil
+		}
+
+		return &serviceRequest
+	}
+}
+
 // DefaultContractParser - default contract parser
 // it parses message text and extracts bot name, service name and method name
 // it used specific regular expression for parsing
 // it returns nil if message doesn't match the pattern
 // message pattern example: @{botname} -service:{servicename} -method:{methodname} -{input1}:"{inputvalue1}" -{input2}:"{inputvalue2}"
-func DefaultContractParser(botUserID id.UserID) ContractParser {
+func DefaultContractParser(bot mxbot.Bot) ContractParser {
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
-		mxbot.FilterTagMe(botUserID),
+		mxbot.FilterTagMe(bot),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
@@ -131,7 +183,7 @@ type Downloader interface {
 }
 
 type AutoParserOpts struct {
-	MXClient    *mautrix.Client
+	Bot         mxbot.Bot
 	ServiceName string
 	MethodName  string
 	InputName   string
@@ -144,7 +196,7 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
-		mxbot.FilterTageMeOrPrivate(opts.MXClient),
+		mxbot.FilterTageMeOrPrivate(opts.Bot),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
