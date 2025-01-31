@@ -10,6 +10,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -43,6 +44,10 @@ type Bot interface {
 
 	GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error)
 	GetThreadByEvent(ctx context.Context, evt *event.Event) (*MessagesThread, error)
+
+	SetIdleStatus()
+	SetOnlineStatus()
+	SetOfflineStatus()
 }
 
 // BotCredentials - credentials of the bot for Matrix
@@ -133,6 +138,8 @@ type DefaultBot struct {
 	isThreadEnabled bool // thread support
 
 	matrixClient *mautrix.Client
+
+	botStatus event.Presence
 
 	credentials *BotCredentials
 
@@ -387,12 +394,42 @@ func (b *DefaultBot) checkFilters(evt *event.Event) bool {
 	return true
 }
 
+// typingData - struct for store information about typing by bots in rooms
+// it is used to avoid problem with cancelling typingEvent when bot have multiple requests at the same time
+type typingData struct {
+	data map[string]int
+	mx   *sync.RWMutex
+}
+
+func (d *typingData) add(roomID id.RoomID) {
+	d.mx.Lock()
+	d.data[roomID.String()]++
+	d.mx.Unlock()
+}
+
+func (d *typingData) remove(roomID id.RoomID) {
+	d.mx.Lock()
+	d.data[roomID.String()]--
+
+	if d.data[roomID.String()] == 0 {
+		delete(d.data, roomID.String())
+	}
+	d.mx.Unlock()
+}
+
+var typing = typingData{
+	data: make(map[string]int),
+	mx:   &sync.RWMutex{},
+}
+
 // LoopTyping - Starts and stops typing on the room. Typing is sent every typingTimeout
 // it will be stopped if the context is cancelled or if an error occurs
 // it returns a function that can be used to stop the typing
 func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
 
 	ticker := time.NewTicker(b.typingTimeout)
+
+	typing.add(roomID)
 
 	err = b.StartTyping(ctx, roomID)
 	if err != nil {
@@ -410,6 +447,8 @@ func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTy
 				}
 
 			case <-c:
+				typing.remove(roomID)
+
 				if err := b.StopTyping(ctx, roomID); err != nil {
 					b.logger.Error("failed to stop typing", "err", err)
 				}
@@ -468,9 +507,25 @@ func (b *DefaultBot) GetThreadByEvent(ctx context.Context, evt *event.Event) (*M
 	return b.GetThread(ctx, roomID, parentEventID)
 }
 
+func (b *DefaultBot) SetStatus(status event.Presence) {
+	b.botStatus = status
+}
+
+func (b *DefaultBot) SetIdleStatus() {
+	b.SetStatus(event.PresenceUnavailable)
+}
+
+func (b *DefaultBot) SetOnlineStatus() {
+	b.SetStatus(event.PresenceOnline)
+}
+
+func (b *DefaultBot) SetOfflineStatus() {
+	b.SetStatus(event.PresenceOffline)
+}
+
 const threadLimit = 120
 
-// GetThreadStory - получает полную историю всех сообщений
+// GetThreadStory - gets the thread story
 func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error) {
 
 	msgs, err := b.matrixClient.Messages(

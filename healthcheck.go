@@ -205,7 +205,15 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 			// if isAutoSwitch is enabled, update service status based on health
 			if h.isAutoSwitch {
-				h.bobrix.services[i].IsOnline = health.Status == healthOk
+				if health.Status == healthOk {
+					h.bobrix.services[i].IsOnline = true
+
+					h.bobrix.bot.SetOnlineStatus()
+				} else {
+					h.bobrix.services[i].IsOnline = false
+
+					h.bobrix.bot.SetIdleStatus()
+				}
 			}
 
 			mx.Lock()

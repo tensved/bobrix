@@ -74,6 +74,7 @@ type Output struct {
 	Type         IOType `json:"type" yaml:"type"`                                   // Type of the output (e.g., text, audio, image, etc.).
 	Description  string `json:"description,omitempty" yaml:"description,omitempty"` // Optional description of the output.
 	DefaultValue any    `json:"default,omitempty" yaml:"default,omitempty"`         // Optional default value for the output.
+	IsPrivate    bool   `json:"is_private" yaml:"is_private"`                       // Indicates if the output is private (for users). TODO: rename.
 	value        any
 }
 
@@ -93,6 +94,7 @@ func (o *Output) AsPublic() OutputPublic {
 		Type:         o.Type,
 		Description:  o.Description,
 		DefaultValue: o.DefaultValue,
+		IsPrivate:    o.IsPrivate,
 	}
 }
 
@@ -112,4 +114,5 @@ type OutputPublic struct {
 	Type         IOType `json:"type" yaml:"type"`                                   // Type of the output (e.g., text, audio, image, etc.).
 	Description  string `json:"description,omitempty" yaml:"description,omitempty"` // Optional description of the output.
 	DefaultValue any    `json:"default,omitempty" yaml:"default,omitempty"`         // Optional default value for the output.
+	IsPrivate    bool   `json:"is_private" yaml:"is_private"`                       // Indicates if the output is private (for users). TODO: rename.
 }

@@ -15,6 +15,32 @@ import (
 // return false if message should be ignored
 type Filter func(evt *event.Event) bool
 
+// FilterAny - filter for any of the given filters
+// return true if any of the filters return true
+func FilterAny(filters ...Filter) Filter {
+	return func(evt *event.Event) bool {
+		for _, filter := range filters {
+			if filter(evt) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// FilterAll - filter for all of the given filters
+// return true if all of the filters return true
+func FilterAll(filters ...Filter) Filter {
+	return func(evt *event.Event) bool {
+		for _, filter := range filters {
+			if !filter(evt) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
 // FilterNotMe - filter for messages from other users
 // (ignores messages from the bot itself)
 func FilterNotMe(matrixClient *mautrix.Client) Filter {

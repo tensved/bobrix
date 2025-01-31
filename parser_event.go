@@ -32,12 +32,14 @@ const BobrixPromptTag = "bobrix.prompt"
 func BobrixContractParser(bot mxbot.Bot) ContractParser {
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
-		mxbot.FilterTagMe(bot),
+		//mxbot.FilterTagMe(bot),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
 		for _, filter := range filters {
 			if !filter(evt) {
+
+				slog.Info("filter failed", "event", evt)
 				return nil
 			}
 		}
@@ -193,6 +195,10 @@ type AutoParserOpts struct {
 // It is convenient to use it in cases when you need to handle situations
 // when a user sends a message that should be sent immediately by a request
 func AutoRequestParser(opts *AutoParserOpts) ContractParser {
+
+	if opts == nil {
+		return nil
+	}
 
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),

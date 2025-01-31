@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 )
 
 // Engine is the main component of the library
@@ -17,6 +18,7 @@ type Engine struct {
 	logger *slog.Logger
 }
 
+// NewEngine - Bobrix engine constructor
 func NewEngine() *Engine {
 	return &Engine{
 		bots:     make([]*Bobrix, 0),
@@ -26,22 +28,34 @@ func NewEngine() *Engine {
 	}
 }
 
+// ConnectBot - add bot to the engine. It is used for adding bots to the engine
 func (e *Engine) ConnectBot(bot *Bobrix) {
 	e.mx.Lock()
 	e.bots = append(e.bots, bot)
 	e.mx.Unlock()
 }
 
+// ConnectService - add service to the store in engine.
 func (e *Engine) ConnectService(service *BobrixService) {
 	e.mx.Lock()
 	e.services = append(e.services, service)
 	e.mx.Unlock()
 }
 
+// Run - launch all bots.
+// It uses semaphore to limit the number of bots that can start (login) at the same time
 func (e *Engine) Run(ctx context.Context) error {
 
+	semaphore := make(chan struct{}, 5)
+
 	for _, bot := range e.bots {
+
 		go func(bot *Bobrix) {
+			semaphore <- struct{}{}
+			go func() {
+				time.Sleep(2 * time.Second)
+				<-semaphore
+			}()
 			ctx := context.Background()
 			if err := bot.Run(ctx); err != nil {
 				e.logger.Error("failed to run bot", "error", err)
@@ -54,6 +68,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// Stop - stop all bots
 func (e *Engine) Stop(ctx context.Context) error {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(e.bots))
@@ -72,6 +87,7 @@ func (e *Engine) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Bots - return all bots
 func (e *Engine) Bots() []*Bobrix {
 	e.mx.RLock()
 	defer e.mx.RUnlock()
@@ -79,6 +95,7 @@ func (e *Engine) Bots() []*Bobrix {
 	return e.bots
 }
 
+// GetBot - return bot by name. If the bot is not found, it returns nil
 func (e *Engine) GetBot(name string) *Bobrix {
 	e.mx.RLock()
 	defer e.mx.RUnlock()
@@ -91,6 +108,7 @@ func (e *Engine) GetBot(name string) *Bobrix {
 	return nil
 }
 
+// Services - return all services
 func (e *Engine) Services() []*BobrixService {
 	e.mx.RLock()
 	defer e.mx.RUnlock()
@@ -98,6 +116,7 @@ func (e *Engine) Services() []*BobrixService {
 	return e.services
 }
 
+// GetService - return service by name. If the service is not found, it returns nil
 func (e *Engine) GetService(name string) *BobrixService {
 	e.mx.RLock()
 	defer e.mx.RUnlock()

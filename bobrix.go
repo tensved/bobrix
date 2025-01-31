@@ -8,6 +8,7 @@ import (
 	"github.com/tensved/bobrix/mxbot"
 	"log/slog"
 	"maunium.net/go/mautrix/event"
+	"strings"
 )
 
 type ServiceHandler func(ctx mxbot.Ctx, r *contracts.MethodResponse)
@@ -93,12 +94,18 @@ func (bx *Bobrix) Use(handler mxbot.EventHandler) {
 	bx.bot.AddEventHandler(handler)
 }
 
+// GetService - return service by name. If the service is not found, it returns nil
+// It is case-insensitive. All services are stored in lowercase
 func (bx *Bobrix) GetService(name string) (*BobrixService, bool) {
+
+	name = strings.ToLower(name)
+
 	for _, botService := range bx.services {
-		if botService.Service.Name == name {
+		if strings.ToLower(botService.Service.Name) == name {
 			return botService, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -118,7 +125,23 @@ type ServiceRequest struct {
 
 type ServiceHandle func(evt *event.Event) *ServiceRequest
 
-func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest) {
+// ContractParserOpts - options for contract parser
+// You can set hooks for pre-call and after-call
+// For example, you can add logging or validation
+type ContractParserOpts struct {
+	PreCallHook   func(ctx mxbot.Ctx, req *ServiceRequest) error
+	AfterCallHook func(ctx mxbot.Ctx, req *ServiceRequest, resp *contracts.MethodResponse) error
+}
+
+// SetContractParser - set contract parser. It is used for parsing events to service requests
+// You can add hooks for pre-call and after-call with ContractParserOpts
+func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest, opts ...ContractParserOpts) {
+
+	var opt ContractParserOpts
+
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
 
 	bx.Use(
 		mxbot.NewEventHandler(
@@ -141,9 +164,9 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 
 				defer unlocker()
 
-				botService, ok := bx.GetService(request.ServiceName)
+				botService, ok := bx.GetService(strings.ToLower(request.ServiceName))
 				if !ok {
-					bx.logger.Error("service not found", "service", request.ServiceName)
+					bx.logger.Error("service not found", "service", request.ServiceName, "services", fmt.Sprintf("%+v", bx.services[0].Service.Name))
 					if err := ctx.TextAnswer(
 						fmt.Sprintf(
 							"service \"%s\" not found",
@@ -175,6 +198,15 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 					opts.Messages = data
 				}
 
+				if opt.PreCallHook != nil {
+					if err := opt.PreCallHook(ctx, request); err != nil {
+						if err := ctx.TextAnswer(fmt.Sprintf("error: %s", err)); err != nil {
+							return err
+						}
+						return err
+					}
+				}
+
 				response, err := service.CallMethod(
 					ctx.Context(),
 					request.MethodName,
@@ -198,6 +230,15 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 					return nil
 				}
 
+				if opt.AfterCallHook != nil {
+					if err := opt.AfterCallHook(ctx, request, response); err != nil {
+						if err := ctx.TextAnswer(fmt.Sprintf("error: %s", err)); err != nil {
+							return err
+						}
+						return err
+					}
+				}
+
 				handler(ctx, response)
 
 				return nil
@@ -211,7 +252,6 @@ func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contr
 	msgs := make([]map[contracts.ChatRole]string, len(thread.Messages))
 
 	for i, msg := range thread.Messages {
-		slog.Info("message", "id", msg.ID, "sender", msg.Sender, "body", msg.Content.AsMessage().Body)
 		msgs[i] = map[contracts.ChatRole]string{}
 
 		body := msg.Content.AsMessage().Body
@@ -223,6 +263,5 @@ func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contr
 		}
 	}
 
-	slog.Info("messages", "count", len(msgs))
 	return msgs
 }
