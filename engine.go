@@ -72,9 +72,9 @@ func (e *Engine) Run(ctx context.Context) error {
 func (e *Engine) Stop(ctx context.Context) error {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(e.bots))
+
 	for _, bot := range e.bots {
 		go func(bot *Bobrix) {
-			ctx := context.Background()
 			if err := bot.Stop(ctx); err != nil {
 				e.logger.Error("failed to stop bot", "error", err)
 			}

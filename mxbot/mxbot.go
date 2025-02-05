@@ -194,7 +194,7 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 		return err
 	}
 
-	if err := b.startSyncer(ctx); err != nil {
+	if err := b.startSyncer(); err != nil {
 		return err
 	}
 
@@ -202,6 +202,10 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 }
 
 func (b *DefaultBot) StopListening(ctx context.Context) error {
+
+	b.matrixClient.StopSync()
+
+	b.logger.Info("stop sync and logout")
 
 	_, err := b.matrixClient.Logout(ctx)
 
@@ -250,64 +254,54 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 	return nil
 }
 
-func (b *DefaultBot) startSyncer(ctx context.Context) error {
+func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
+
+	if !b.checkFilters(evt) {
+		return
+	}
+
+	cancelTyping, err := b.LoopTyping(ctx, evt.RoomID)
+
+	if err != nil {
+		b.logger.Warn("failed to start typing", "err", err)
+	} else {
+		defer cancelTyping()
+	}
+
+	eventContext, err := NewDefaultCtx(ctx, evt, b)
+
+	defer eventContext.SetHandled()
+
+	if err != nil {
+		b.logger.Error("failed to create event context", "err", err)
+		return
+	}
+
+	for _, handler := range b.eventHandlers {
+		err := handler.Handle(eventContext)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func (b *DefaultBot) startSyncer() error {
 
 	syncer := b.matrixClient.Syncer.(*mautrix.DefaultSyncer)
 
 	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
-
-		go func() {
-
-			if !b.checkFilters(evt) {
-				return
-			}
-
-			cancelTyping, err := b.LoopTyping(ctx, evt.RoomID)
-
-			if err != nil {
-				b.logger.Warn("failed to start typing", "err", err)
-			} else {
-				defer cancelTyping()
-			}
-
-			eventContext, err := NewDefaultCtx(ctx, evt, b)
-
-			defer eventContext.SetHandled()
-
-			if err != nil {
-				b.logger.Error("failed to create event context", "err", err)
-				return
-			}
-
-			for _, handler := range b.eventHandlers {
-				err := handler.Handle(eventContext)
-				if err != nil {
-					return
-				}
-			}
-
-		}()
+		go b.eventHandler(ctx, evt)
 	})
 
-	// Start goroutine for syncing the events from the homeserver
-	go func(ctx context.Context) {
-		b.logger.Info("syncer started")
-
+	go func() {
 		for {
-			select {
-			case <-ctx.Done():
-				b.logger.Info("syncer stopped")
-				return
-
-			default:
-				err := b.matrixClient.Sync()
-				if err != nil {
-					b.logger.Error("sync error", "error", err)
-					time.Sleep(b.syncerTimeRetry) // Wait before retrying
-				}
+			b.logger.Info("start sync")
+			if err := b.matrixClient.Sync(); err != nil {
+				b.logger.Error("failed to sync", "err", err)
+				time.Sleep(b.syncerTimeRetry)
 			}
 		}
-	}(ctx)
+	}()
 
 	return nil
 }
@@ -409,12 +403,13 @@ func (d *typingData) add(roomID id.RoomID) {
 
 func (d *typingData) remove(roomID id.RoomID) {
 	d.mx.Lock()
+	defer d.mx.Unlock()
+
 	d.data[roomID.String()]--
 
 	if d.data[roomID.String()] == 0 {
 		delete(d.data, roomID.String())
 	}
-	d.mx.Unlock()
 }
 
 var typing = typingData{
@@ -452,6 +447,8 @@ func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTy
 				if err := b.StopTyping(ctx, roomID); err != nil {
 					b.logger.Error("failed to stop typing", "err", err)
 				}
+
+				return
 			}
 		}
 	}(cancel)
