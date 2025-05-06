@@ -56,7 +56,7 @@ func (e *Engine) Run(ctx context.Context) error {
 				time.Sleep(2 * time.Second)
 				<-semaphore
 			}()
-			ctx := context.Background()
+
 			if err := bot.Run(ctx); err != nil {
 				e.logger.Error("failed to run bot", "error", err)
 			}
