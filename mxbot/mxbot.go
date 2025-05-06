@@ -194,7 +194,7 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 		return err
 	}
 
-	if err := b.startSyncer(); err != nil {
+	if err := b.startSyncer(ctx); err != nil {
 		return err
 	}
 
