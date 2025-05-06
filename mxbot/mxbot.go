@@ -285,20 +285,25 @@ func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
 	}
 }
 
-func (b *DefaultBot) startSyncer() error {
-
+func (b *DefaultBot) startSyncer(ctx context.Context) error {
 	syncer := b.matrixClient.Syncer.(*mautrix.DefaultSyncer)
 
-	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
-		go b.eventHandler(ctx, evt)
+	syncer.OnEvent(func(eventCtx context.Context, evt *event.Event) {
+		go b.eventHandler(eventCtx, evt)
 	})
 
 	go func() {
 		for {
-			b.logger.Info("start sync")
-			if err := b.matrixClient.Sync(); err != nil {
-				b.logger.Error("failed to sync", "err", err)
-				time.Sleep(b.syncerTimeRetry)
+			select {
+			case <-ctx.Done():
+				b.logger.Info("syncer stopped by context")
+				return
+			default:
+				b.logger.Info("start sync")
+				if err := b.matrixClient.Sync(); err != nil {
+					b.logger.Error("failed to sync", "err", err)
+					time.Sleep(b.syncerTimeRetry)
+				}
 			}
 		}
 	}()
