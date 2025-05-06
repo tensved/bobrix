@@ -328,16 +328,22 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		}
 	}
 
-	go func() {
-		ctx := context.Background()
+	go func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Minute)
-
-		for range ticker.C {
-			if err := b.authBot(ctx); err != nil {
-				b.logger.Error("failed to auth bot", "error", err)
+		defer ticker.Stop()
+	
+		for {
+			select {
+			case <-ticker.C:
+				if err := b.authBot(ctx); err != nil {
+					b.logger.Error("failed to auth bot", "error", err)
+				}
+			case <-ctx.Done():
+				b.logger.Info("auth ticker stopped")
+				return
 			}
 		}
-	}()
+	}(ctx)
 
 	return nil
 }
