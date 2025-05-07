@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/tensved/bobrix/mxbot/messages"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 type Bot interface {
@@ -147,6 +148,8 @@ type DefaultBot struct {
 
 	syncerTimeRetry time.Duration
 	typingTimeout   time.Duration
+
+	cancelFunc context.CancelFunc
 }
 
 func (b *DefaultBot) Name() string {
@@ -189,12 +192,14 @@ func (b *DefaultBot) Download(ctx context.Context, mxcURL id.ContentURI) ([]byte
 }
 
 func (b *DefaultBot) StartListening(ctx context.Context) error {
+	syncCtx, cancel := context.WithCancel(ctx)
+	b.cancelFunc = cancel
 
 	if err := b.prepareBot(ctx); err != nil {
 		return err
 	}
 
-	if err := b.startSyncer(); err != nil {
+	if err := b.startSyncer(syncCtx); err != nil {
 		return err
 	}
 
@@ -202,6 +207,9 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 }
 
 func (b *DefaultBot) StopListening(ctx context.Context) error {
+	if b.cancelFunc != nil {
+		b.cancelFunc() // останавливает goroutine с Sync()
+	}
 
 	b.matrixClient.StopSync()
 
@@ -285,20 +293,26 @@ func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
 	}
 }
 
-func (b *DefaultBot) startSyncer() error {
-
+func (b *DefaultBot) startSyncer(ctx context.Context) error {
 	syncer := b.matrixClient.Syncer.(*mautrix.DefaultSyncer)
 
-	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
-		go b.eventHandler(ctx, evt)
+	syncer.OnEvent(func(eventCtx context.Context, evt *event.Event) {
+		go b.eventHandler(eventCtx, evt)
 	})
 
 	go func() {
 		for {
-			b.logger.Info("start sync")
-			if err := b.matrixClient.Sync(); err != nil {
-				b.logger.Error("failed to sync", "err", err)
-				time.Sleep(b.syncerTimeRetry)
+			select {
+			case <-ctx.Done():
+				b.logger.Info("syncer stopped by context")
+				return
+			default:
+				b.logger.Info("start sync")
+				err := b.matrixClient.SyncWithContext(ctx)
+				if err != nil && ctx.Err() == nil {
+					b.logger.Error("failed to sync", "err", err)
+					time.Sleep(b.syncerTimeRetry)
+				}
 			}
 		}
 	}()
@@ -323,16 +337,22 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		}
 	}
 
-	go func() {
-		ctx := context.Background()
+	go func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Minute)
+		defer ticker.Stop()
 
-		for range ticker.C {
-			if err := b.authBot(ctx); err != nil {
-				b.logger.Error("failed to auth bot", "error", err)
+		for {
+			select {
+			case <-ticker.C:
+				if err := b.authBot(ctx); err != nil {
+					b.logger.Error("failed to auth bot", "error", err)
+				}
+			case <-ctx.Done():
+				b.logger.Info("auth ticker stopped")
+				return
 			}
 		}
-	}()
+	}(ctx)
 
 	return nil
 }
