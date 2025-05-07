@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/tensved/bobrix/mxbot/messages"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 type Bot interface {
@@ -147,6 +148,8 @@ type DefaultBot struct {
 
 	syncerTimeRetry time.Duration
 	typingTimeout   time.Duration
+
+	cancelFunc context.CancelFunc
 }
 
 func (b *DefaultBot) Name() string {
@@ -189,12 +192,14 @@ func (b *DefaultBot) Download(ctx context.Context, mxcURL id.ContentURI) ([]byte
 }
 
 func (b *DefaultBot) StartListening(ctx context.Context) error {
+	syncCtx, cancel := context.WithCancel(ctx)
+	b.cancelFunc = cancel
 
 	if err := b.prepareBot(ctx); err != nil {
 		return err
 	}
 
-	if err := b.startSyncer(ctx); err != nil {
+	if err := b.startSyncer(syncCtx); err != nil {
 		return err
 	}
 
@@ -202,6 +207,9 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 }
 
 func (b *DefaultBot) StopListening(ctx context.Context) error {
+	if b.cancelFunc != nil {
+        b.cancelFunc() // останавливает goroutine с Sync()
+    }
 
 	b.matrixClient.StopSync()
 
@@ -331,7 +339,7 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 	go func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Minute)
 		defer ticker.Stop()
-	
+
 		for {
 			select {
 			case <-ticker.C:
