@@ -208,8 +208,8 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 
 func (b *DefaultBot) StopListening(ctx context.Context) error {
 	if b.cancelFunc != nil {
-        b.cancelFunc() // останавливает goroutine с Sync()
-    }
+		b.cancelFunc() // останавливает goroutine с Sync()
+	}
 
 	b.matrixClient.StopSync()
 
@@ -308,7 +308,8 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 				return
 			default:
 				b.logger.Info("start sync")
-				if err := b.matrixClient.Sync(); err != nil {
+				err := b.matrixClient.SyncWithContext(ctx)
+				if err != nil && ctx.Err() == nil {
 					b.logger.Error("failed to sync", "err", err)
 					time.Sleep(b.syncerTimeRetry)
 				}
