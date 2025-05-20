@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto"
+	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -96,12 +101,14 @@ func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOp
 		return nil, err
 	}
 
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
 	bot := &DefaultBot{
 		matrixClient:  client,
 		name:          botName,
 		eventHandlers: make([]EventHandler, 0),
 		credentials:   botCredentials,
-		logger:        slog.Default().With("bot", botName),
+		logger:        &logger,
 
 		syncerTimeRetry: defaultSyncerRetryTime,
 		typingTimeout:   defaultTypingTimeout,
@@ -139,12 +146,13 @@ type DefaultBot struct {
 	isThreadEnabled bool // thread support
 
 	matrixClient *mautrix.Client
+	machine      *crypto.OlmMachine
 
 	botStatus event.Presence
 
 	credentials *BotCredentials
 
-	logger *slog.Logger
+	logger *zerolog.Logger
 
 	syncerTimeRetry time.Duration
 	typingTimeout   time.Duration
@@ -208,12 +216,12 @@ func (b *DefaultBot) StartListening(ctx context.Context) error {
 
 func (b *DefaultBot) StopListening(ctx context.Context) error {
 	if b.cancelFunc != nil {
-		b.cancelFunc() // останавливает goroutine с Sync()
+		b.cancelFunc() // stops goroutine с Sync()
 	}
 
 	b.matrixClient.StopSync()
 
-	b.logger.Info("stop sync and logout")
+	b.logger.Info().Msg("stop sync and logout")
 
 	_, err := b.matrixClient.Logout(ctx)
 
@@ -271,7 +279,7 @@ func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
 	cancelTyping, err := b.LoopTyping(ctx, evt.RoomID)
 
 	if err != nil {
-		b.logger.Warn("failed to start typing", "err", err)
+		b.logger.Warn().Err(err).Msg("failed to start typing")
 	} else {
 		defer cancelTyping()
 	}
@@ -281,7 +289,7 @@ func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
 	defer eventContext.SetHandled()
 
 	if err != nil {
-		b.logger.Error("failed to create event context", "err", err)
+		b.logger.Error().Err(err).Msg("failed to create event context")
 		return
 	}
 
@@ -300,17 +308,92 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 		go b.eventHandler(eventCtx, evt)
 	})
 
+	// Encrypted Message Handler
+	syncer.OnEventType(event.EventEncrypted, func(ctx context.Context, evt *event.Event) {
+		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received encrypted message")
+
+		decrypted, err := b.machine.DecryptMegolmEvent(ctx, evt)
+		if err != nil {
+			b.logger.Error().
+				Err(err).
+				Str("room_id", evt.RoomID.String()).
+				Str("sender_key", string(evt.Content.AsEncrypted().SenderKey)).
+				Str("session_id", string(evt.Content.AsEncrypted().SessionID)).
+				Str("device_id", string(evt.Content.AsEncrypted().DeviceID)).
+				Str("sender", string(evt.Sender)).
+				Msg("failed to decrypt message")
+
+			if err.Error() == "no session with given ID found" {
+				// Request the key from the sender
+				err = b.machine.SendRoomKeyRequest(ctx, evt.RoomID, evt.Content.AsEncrypted().SenderKey, evt.Content.AsEncrypted().SessionID, "m.megolm.v1", map[id.UserID][]id.DeviceID{
+					evt.Sender: {id.DeviceID(evt.Content.AsEncrypted().DeviceID)},
+				})
+				if err != nil {
+					b.logger.Error().Err(err).Msg("failed to request room key")
+					return
+				}
+				b.logger.Info().Msg("sent room key request")
+			}
+			return
+		}
+
+		b.logger.Info().Str("content", decrypted.Content.AsMessage().Body).Msg("decrypted message")
+	})
+
+	// Room Key Receiver Handler
+	syncer.OnEventType(event.ToDeviceRoomKey, func(ctx context.Context, evt *event.Event) {
+		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received room key event")
+		content := evt.Content.AsRoomKey()
+		if content == nil {
+			b.logger.Error().Msg("invalid room key format")
+			return
+		}
+		b.logger.Info().
+			Str("room_id", string(content.RoomID)).
+			Str("session_id", string(content.SessionID)).
+			Msg("room key")
+		b.machine.HandleToDeviceEvent(ctx, evt)
+	})
+
+	// Key Request Handler
+	syncer.OnEventType(event.ToDeviceRoomKeyRequest, func(ctx context.Context, evt *event.Event) {
+		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received room key request")
+		content := evt.Content.AsRoomKeyRequest()
+		if content == nil {
+			b.logger.Error().Msg("invalid room key request format")
+			return
+		}
+
+		b.logger.Info().Str("sender", string(evt.Sender)).Msg("room key request from")
+		b.machine.HandleToDeviceEvent(ctx, evt)
+	})
+
+	// Handler for receiving transferred keys
+	syncer.OnEventType(event.ToDeviceForwardedRoomKey, func(ctx context.Context, evt *event.Event) {
+		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received forwarded room key")
+		content := evt.Content.AsForwardedRoomKey()
+		if content == nil {
+			b.logger.Error().Msg("invalid forwarded room key format")
+			return
+		}
+		b.logger.Info().
+			Str("room_id", string(content.RoomID)).
+			Str("session_id", string(content.SessionID)).
+			Msg("forwarded room key")
+		b.machine.HandleToDeviceEvent(ctx, evt)
+	})
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				b.logger.Info("syncer stopped by context")
+				b.logger.Info().Msg("syncer stopped by context")
 				return
 			default:
-				b.logger.Info("start sync")
+				b.logger.Info().Msg("start sync")
 				err := b.matrixClient.SyncWithContext(ctx)
 				if err != nil && ctx.Err() == nil {
-					b.logger.Error("failed to sync", "err", err)
+					b.logger.Error().Err(err).Msg("failed to sync")
 					time.Sleep(b.syncerTimeRetry)
 				}
 			}
@@ -324,7 +407,6 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 // and register the bot if it is not registered
 // also refreshes the access token if it is expired
 func (b *DefaultBot) prepareBot(ctx context.Context) error {
-
 	if err := b.authBot(ctx); err != nil {
 		if err := b.registerBot(ctx); err != nil {
 			return err
@@ -337,6 +419,12 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		}
 	}
 
+	// Initialize cryptography only after successful authorization
+	if err := b.initCrypto(ctx); err != nil {
+		return fmt.Errorf("failed to init crypto: %w", err)
+	}
+
+	// Starting a periodic token update
 	go func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Minute)
 		defer ticker.Stop()
@@ -345,10 +433,10 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 			select {
 			case <-ticker.C:
 				if err := b.authBot(ctx); err != nil {
-					b.logger.Error("failed to auth bot", "error", err)
+					b.logger.Error().Err(err).Msg("failed to auth bot")
 				}
 			case <-ctx.Done():
-				b.logger.Info("auth ticker stopped")
+				b.logger.Info().Msg("auth ticker stopped")
 				return
 			}
 		}
@@ -359,22 +447,67 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 
 // authBot - Authenticates the bot with the homeserver
 func (b *DefaultBot) authBot(ctx context.Context) error {
+	// Получаем текущую директорию
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
 
-	resp, err := b.matrixClient.Login(ctx, &mautrix.ReqLogin{
+	// Check if a file with a saved device ID exists
+	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", b.name))
+	var deviceID id.DeviceID
+
+	if _, err := os.Stat(deviceIDFile); err == nil {
+		// If the file exists, read the device ID
+		data, err := os.ReadFile(deviceIDFile)
+		if err != nil {
+			return fmt.Errorf("failed to read device ID file: %w", err)
+		}
+		deviceID = id.DeviceID(string(data))
+	}
+
+	loginReq := &mautrix.ReqLogin{
 		Type: mautrix.AuthTypePassword,
 		Identifier: mautrix.UserIdentifier{
 			Type: mautrix.IdentifierTypeUser,
 			User: b.credentials.Username,
 		},
 		Password: b.credentials.Password,
-	})
+	}
 
+	// If we have a saved device ID, we use it
+	if deviceID != "" {
+		loginReq.DeviceID = deviceID
+	}
+
+	resp, err := b.matrixClient.Login(ctx, loginReq)
 	if err != nil {
 		return err
 	}
 
 	b.matrixClient.UserID = resp.UserID
 	b.matrixClient.AccessToken = resp.AccessToken
+	b.matrixClient.DeviceID = resp.DeviceID
+
+	// Save device ID to file
+	cryptoDir := filepath.Join(currentDir, ".bin", "crypto")
+	if err := os.MkdirAll(cryptoDir, 0755); err != nil {
+		return fmt.Errorf("failed to create crypto directory: %w", err)
+	}
+
+	if err := os.WriteFile(deviceIDFile, []byte(resp.DeviceID), 0644); err != nil {
+		return fmt.Errorf("failed to save device ID: %w", err)
+	}
+
+	// We check that the client is actually authorized
+	whoami, err := b.matrixClient.Whoami(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to verify login: %w", err)
+	}
+
+	if whoami.UserID != resp.UserID {
+		return fmt.Errorf("user ID mismatch: got %s, expected %s", whoami.UserID, resp.UserID)
+	}
 
 	return nil
 }
@@ -458,14 +591,14 @@ func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTy
 			select {
 			case <-ticker.C:
 				if err := b.StartTyping(ctx, roomID); err != nil {
-					b.logger.Error("failed to stop typing", "err", err)
+					b.logger.Error().Err(err).Msg("failed to stop typing")
 				}
 
 			case <-c:
 				typing.remove(roomID)
 
 				if err := b.StopTyping(ctx, roomID); err != nil {
-					b.logger.Error("failed to stop typing", "err", err)
+					b.logger.Error().Err(err).Msg("failed to stop typing")
 				}
 
 				return
@@ -483,7 +616,6 @@ func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTy
 }
 
 // StartTyping - Starts typing on the room
-// it will be stopped after timeout or when user stops typing
 func (b *DefaultBot) StartTyping(ctx context.Context, roomID id.RoomID) error {
 	_, err := b.matrixClient.UserTyping(ctx, roomID, true, b.typingTimeout)
 	return err
@@ -641,4 +773,56 @@ func GetFixedMessage(evt *event.Event) (*event.MessageEventContent, bool) {
 	}
 
 	return msg, true
+}
+
+func (b *DefaultBot) initCrypto(ctx context.Context) error {
+	// Check that the client is authorized
+	if b.matrixClient.UserID == "" || b.matrixClient.AccessToken == "" {
+		return fmt.Errorf("client is not logged in")
+	}
+
+	// Get the current directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	pickleKey := []byte("12345678901234567890123456789012")
+	storeDir := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("crypto-store-%s.db", b.name))
+
+	// Create a directory to store cryptographic data
+	cryptoDir := filepath.Join(currentDir, ".bin", "crypto")
+	if err := os.MkdirAll(cryptoDir, 0755); err != nil {
+		return fmt.Errorf("failed to create crypto directory: %w", err)
+	}
+
+	// Create a crypto helper with automatic session management
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(b.matrixClient, pickleKey, storeDir)
+	if err != nil {
+		return fmt.Errorf("failed to create crypto helper: %w", err)
+	}
+
+	// Initialize the crypto helper
+	err = cryptoHelper.Init(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to init crypto helper: %w", err)
+	}
+
+	// We get a machine for encryption/decryption
+	b.machine = cryptoHelper.Machine()
+
+	// Loading the machine context
+	err = b.machine.Load(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load olm machine: %w", err)
+	}
+
+	identity := b.machine.OwnIdentity()
+	if identity == nil {
+		return fmt.Errorf("failed to get own identity")
+	}
+
+	b.logger.Info().Interface("identity", identity).Msg("crypto initialized")
+
+	return nil
 }
