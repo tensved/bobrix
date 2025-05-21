@@ -63,6 +63,7 @@ type BotCredentials struct {
 	Username      string
 	Password      string
 	HomeServerURL string
+	PickleKey     []byte
 }
 
 var (
@@ -95,7 +96,7 @@ func WithDisplayName(name string) BotOptions {
 // NewDefaultBot - Bot constructor
 // botName - name of the bot (should be unique for engine)
 // botCredentials - matrix credentials of the bot
-func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOptions) (Bot, error) {
+func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOptions) (Bot, error) { //!!
 	client, err := mautrix.NewClient(botCredentials.HomeServerURL, "", "")
 	if err != nil {
 		return nil, err
@@ -778,7 +779,6 @@ func (b *DefaultBot) initCrypto(ctx context.Context) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	pickleKey := []byte("12345678901234567890123456789012")
 	storeDir := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("crypto-store-%s.db", b.name))
 
 	// Create a directory to store cryptographic data
@@ -788,7 +788,7 @@ func (b *DefaultBot) initCrypto(ctx context.Context) error {
 	}
 
 	// Create a crypto helper with automatic session management
-	cryptoHelper, err := cryptohelper.NewCryptoHelper(b.matrixClient, pickleKey, storeDir)
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(b.matrixClient, b.credentials.PickleKey, storeDir)
 	if err != nil {
 		return fmt.Errorf("failed to create crypto helper: %w", err)
 	}
