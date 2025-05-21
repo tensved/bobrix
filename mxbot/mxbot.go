@@ -96,7 +96,7 @@ func WithDisplayName(name string) BotOptions {
 // NewDefaultBot - Bot constructor
 // botName - name of the bot (should be unique for engine)
 // botCredentials - matrix credentials of the bot
-func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOptions) (Bot, error) { //!!
+func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOptions) (Bot, error) { 
 	client, err := mautrix.NewClient(botCredentials.HomeServerURL, "", "")
 	if err != nil {
 		return nil, err
