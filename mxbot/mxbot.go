@@ -310,16 +310,13 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 
 	// Encrypted Message Handler
 	syncer.OnEventType(event.EventEncrypted, func(ctx context.Context, evt *event.Event) {
-		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received encrypted message")
+		b.logger.Info().Msg("received encrypted message")
 
-		decrypted, err := b.machine.DecryptMegolmEvent(ctx, evt)
+		_, err := b.machine.DecryptMegolmEvent(ctx, evt)
 		if err != nil {
 			b.logger.Error().
 				Err(err).
 				Str("room_id", evt.RoomID.String()).
-				Str("sender_key", string(evt.Content.AsEncrypted().SenderKey)).
-				Str("session_id", string(evt.Content.AsEncrypted().SessionID)).
-				Str("device_id", string(evt.Content.AsEncrypted().DeviceID)).
 				Str("sender", string(evt.Sender)).
 				Msg("failed to decrypt message")
 
@@ -337,7 +334,7 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 			return
 		}
 
-		b.logger.Info().Str("content", decrypted.Content.AsMessage().Body).Msg("decrypted message")
+		b.logger.Info().Msg("message decrypted successfully")
 	})
 
 	// Room Key Receiver Handler
@@ -348,16 +345,13 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 			b.logger.Error().Msg("invalid room key format")
 			return
 		}
-		b.logger.Info().
-			Str("room_id", string(content.RoomID)).
-			Str("session_id", string(content.SessionID)).
-			Msg("room key")
+
 		b.machine.HandleToDeviceEvent(ctx, evt)
 	})
 
 	// Key Request Handler
 	syncer.OnEventType(event.ToDeviceRoomKeyRequest, func(ctx context.Context, evt *event.Event) {
-		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received room key request")
+		b.logger.Info().Msg("received room key request")
 		content := evt.Content.AsRoomKeyRequest()
 		if content == nil {
 			b.logger.Error().Msg("invalid room key request format")
@@ -368,18 +362,15 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 		b.machine.HandleToDeviceEvent(ctx, evt)
 	})
 
-	// Handler for receiving transferred keys
+	// Handler for receiving forwarded room keys
 	syncer.OnEventType(event.ToDeviceForwardedRoomKey, func(ctx context.Context, evt *event.Event) {
-		b.logger.Info().Interface("content", evt.Content.Raw).Msg("received forwarded room key")
+		b.logger.Info().Msg("received forwarded room key")
 		content := evt.Content.AsForwardedRoomKey()
 		if content == nil {
 			b.logger.Error().Msg("invalid forwarded room key format")
 			return
 		}
-		b.logger.Info().
-			Str("room_id", string(content.RoomID)).
-			Str("session_id", string(content.SessionID)).
-			Msg("forwarded room key")
+
 		b.machine.HandleToDeviceEvent(ctx, evt)
 	})
 
