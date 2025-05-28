@@ -34,6 +34,7 @@ type Ctx interface {
 
 	Answer(msg messages.Message) error
 	TextAnswer(text string) error
+	ErrorAnswer(errorText string, errorType string) error
 
 	IsHandled() bool
 	SetHandled()
