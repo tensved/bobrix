@@ -2,10 +2,11 @@ package mxbot
 
 import (
 	"context"
-	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
-	"maunium.net/go/mautrix/event"
 	"sync"
+
+	"github.com/tensved/bobrix/mxbot/messages"
+	"maunium.net/go/mautrix/event"
 )
 
 const (
