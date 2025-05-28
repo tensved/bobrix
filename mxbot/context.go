@@ -195,6 +195,13 @@ func (c *DefaultCtx) TextAnswer(text string) error {
 	return c.Answer(messages.NewText(text))
 }
 
+// ErrorAnswer - send a text error message with error type added to the room
+func (c *DefaultCtx) ErrorAnswer(errorText string, errorType string) error {
+	msg := messages.NewText(errorText)
+	msg.AddCustomFields("error_code", errorType)
+	return c.Answer(msg)
+}
+
 // Context - return the root context
 func (c *DefaultCtx) Context() context.Context {
 	return c.context
