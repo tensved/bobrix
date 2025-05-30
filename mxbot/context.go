@@ -197,7 +197,7 @@ func (c *DefaultCtx) TextAnswer(text string) error {
 	return c.Answer(messages.NewText(text))
 }
 
-// ErrorAnswer - send a text error message with error type added to the room
+// ErrorAnswer - send a text error message  to the room with error_code added
 func (c *DefaultCtx) ErrorAnswer(errorText string, errorType string) error {
 	msg := messages.NewText(errorText)
 	msg.AddCustomFields("error_code", errorType)
