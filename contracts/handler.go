@@ -1,13 +1,12 @@
 package contracts
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // MethodResponse describes the response of a method, including output data and any errors.
 type MethodResponse struct {
 	Outputs map[string]Output // Outputs contains the output data of the method.
 	Err     error             // Err contains any error encountered during method execution.
+	ErrCode string
 }
 
 // Get retrieves the value of a specific output by name.

@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
+
 	"github.com/tensved/bobrix/contracts"
 	"github.com/tensved/bobrix/mxbot"
-	"log/slog"
 	"maunium.net/go/mautrix/event"
-	"strings"
 )
 
 type ServiceHandler func(ctx mxbot.Ctx, r *contracts.MethodResponse)
@@ -129,8 +130,8 @@ type ServiceHandle func(evt *event.Event) *ServiceRequest
 // You can set hooks for pre-call and after-call
 // For example, you can add logging or validation
 type ContractParserOpts struct {
-	PreCallHook   func(ctx mxbot.Ctx, req *ServiceRequest) error
-	AfterCallHook func(ctx mxbot.Ctx, req *ServiceRequest, resp *contracts.MethodResponse) error
+	PreCallHook   func(ctx mxbot.Ctx, req *ServiceRequest) (string, error)
+	AfterCallHook func(ctx mxbot.Ctx, req *ServiceRequest, resp *contracts.MethodResponse) (string, error)
 }
 
 // SetContractParser - set contract parser. It is used for parsing events to service requests
@@ -167,11 +168,12 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				botService, ok := bx.GetService(strings.ToLower(request.ServiceName))
 				if !ok {
 					bx.logger.Error("service not found", "service", request.ServiceName, "services", fmt.Sprintf("%+v", bx.services[0].Service.Name))
-					if err := ctx.TextAnswer(
+					if err := ctx.ErrorAnswer(
 						fmt.Sprintf(
 							"service \"%s\" not found",
 							request.ServiceName,
 						),
+						contracts.ErrCodeServiceNotFound,
 					); err != nil {
 						return err
 					}
@@ -199,8 +201,9 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				}
 
 				if opt.PreCallHook != nil {
-					if err := opt.PreCallHook(ctx, request); err != nil {
-						if err := ctx.TextAnswer(fmt.Sprintf("error: %s", err)); err != nil {
+					errCode, err := opt.PreCallHook(ctx, request)
+					if err != nil {
+						if err := ctx.ErrorAnswer(fmt.Sprintf("error: %s", err), errCode); err != nil { //!
 							return err
 						}
 						return err
@@ -217,12 +220,12 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				if err != nil {
 					switch {
 					case errors.Is(err, contracts.ErrMethodNotFound):
-						if err := ctx.TextAnswer(fmt.Sprintf("method \"%s\" not found", request.MethodName)); err != nil {
+						if err := ctx.ErrorAnswer(fmt.Sprintf("method \"%s\" not found", request.MethodName), contracts.ErrCodeMethodNotFound); err != nil {
 							return err
 						}
 
 					default:
-						if err := ctx.TextAnswer(fmt.Sprintf("error: %s", err)); err != nil {
+						if err := ctx.ErrorAnswer(err.Error(), response.ErrCode); err != nil {
 							return err
 						}
 					}
@@ -231,8 +234,9 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				}
 
 				if opt.AfterCallHook != nil {
-					if err := opt.AfterCallHook(ctx, request, response); err != nil {
-						if err := ctx.TextAnswer(fmt.Sprintf("error: %s", err)); err != nil {
+					errCode, err := opt.AfterCallHook(ctx, request, response)
+					if err != nil {
+						if err := ctx.ErrorAnswer(err.Error(), errCode); err != nil {
 							return err
 						}
 						return err

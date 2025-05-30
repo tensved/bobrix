@@ -2,10 +2,11 @@ package mxbot
 
 import (
 	"context"
-	"github.com/tensved/bobrix/mxbot/messages"
 	"log/slog"
-	"maunium.net/go/mautrix/event"
 	"sync"
+
+	"github.com/tensved/bobrix/mxbot/messages"
+	"maunium.net/go/mautrix/event"
 )
 
 const (
@@ -33,6 +34,7 @@ type Ctx interface {
 
 	Answer(msg messages.Message) error
 	TextAnswer(text string) error
+	ErrorAnswer(errorText string, errorType string) error
 
 	IsHandled() bool
 	SetHandled()
@@ -193,6 +195,13 @@ func (c *DefaultCtx) Answer(msg messages.Message) error {
 // TextAnswer - send a text message to the room
 func (c *DefaultCtx) TextAnswer(text string) error {
 	return c.Answer(messages.NewText(text))
+}
+
+// ErrorAnswer - send a text error message  to the room with error_code added
+func (c *DefaultCtx) ErrorAnswer(errorText string, errorType string) error {
+	msg := messages.NewText(errorText)
+	msg.AddCustomFields("error_code", errorType)
+	return c.Answer(msg)
 }
 
 // Context - return the root context
