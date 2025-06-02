@@ -11,8 +11,3 @@ var (
 	ErrCodeServiceNotFound = 1 // "service not found"
 	ErrCodeMethodNotFound  = 2 // "method not found"
 )
-
-var ErrorResponses = map[int]string{
-	1: "service not found",
-	2: "method not found",
-}
