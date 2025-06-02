@@ -4,9 +4,10 @@ import "fmt"
 
 // MethodResponse describes the response of a method, including output data and any errors.
 type MethodResponse struct {
-	Outputs map[string]Output // Outputs contains the output data of the method.
-	Err     error             // Err contains any error encountered during method execution.
-	ErrCode string
+	Outputs     map[string]Output // Outputs contains the output data of the method.
+	ServiceName string            // ServiceName is the name of the service that the method belongs to.
+	Err         error             // Err contains any error encountered during method execution.
+	ErrCode     int               // ErrCode is the error code of the method.
 }
 
 // Get retrieves the value of a specific output by name.

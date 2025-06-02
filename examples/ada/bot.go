@@ -12,7 +12,7 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 	if err != nil {
 		return nil, err
 	}
-	//
+	
 	bot.AddCommand(mxbot.NewCommand(
 		"ping",
 		func(c mxbot.CommandCtx) error {
@@ -40,7 +40,7 @@ func NewAdaBot(credentials *mxbot.BotCredentials) (*bobrix.Bobrix, error) {
 		InputName:   "prompt",
 	}))
 
-	bobr.ConnectService(NewADAService("hilltwinssl.singularitynet.io"), func(ctx mxbot.Ctx, r *contracts.MethodResponse) {
+	bobr.ConnectService(NewADAService("hilltwinssl.singularitynet.io"), func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any) {
 
 		if r.Err != nil {
 			slog.Error("failed to process request", "error", r.Err)
