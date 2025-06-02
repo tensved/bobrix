@@ -12,7 +12,7 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-type ServiceHandler func(ctx mxbot.Ctx, r *contracts.MethodResponse)
+type ServiceHandler func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any)
 
 // BobrixService - service for bot
 // Binds service and adds handler for processing
@@ -81,7 +81,7 @@ func (bx *Bobrix) Stop(ctx context.Context) error {
 // ConnectService - add service to the bot
 // It is used for adding services
 // It adds handler for processing the events of the service
-func (bx *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse)) {
+func (bx *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any)) {
 	bx.services = append(bx.services, &BobrixService{
 		Service:  service,
 		Handler:  handler,
@@ -130,8 +130,8 @@ type ServiceHandle func(evt *event.Event) *ServiceRequest
 // You can set hooks for pre-call and after-call
 // For example, you can add logging or validation
 type ContractParserOpts struct {
-	PreCallHook   func(ctx mxbot.Ctx, req *ServiceRequest) (string, error)
-	AfterCallHook func(ctx mxbot.Ctx, req *ServiceRequest, resp *contracts.MethodResponse) (string, error)
+	PreCallHook   func(ctx mxbot.Ctx, req *ServiceRequest) (string, int, error)
+	AfterCallHook func(ctx mxbot.Ctx, req *ServiceRequest, resp *contracts.MethodResponse) (string, int, error)
 }
 
 // SetContractParser - set contract parser. It is used for parsing events to service requests
@@ -170,7 +170,7 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 					bx.logger.Error("service not found", "service", request.ServiceName, "services", fmt.Sprintf("%+v", bx.services[0].Service.Name))
 					if err := ctx.ErrorAnswer(
 						fmt.Sprintf(
-							"service \"%s\" not found",
+							"Service \"%s\" not found",
 							request.ServiceName,
 						),
 						contracts.ErrCodeServiceNotFound,
@@ -188,8 +188,8 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				// IsOnline is true by default. But it can be changed with Healthcheck with WithAutoSwitch() option
 				if !botService.IsOnline {
 					handler(ctx, &contracts.MethodResponse{
-						Err: fmt.Errorf("service \"%s\" is offline", request.ServiceName),
-					})
+						Err: fmt.Errorf("Service \"%s\" is offline", request.ServiceName),
+					}, nil)
 					return nil
 				}
 
@@ -201,9 +201,9 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				}
 
 				if opt.PreCallHook != nil {
-					errCode, err := opt.PreCallHook(ctx, request)
+					errMsg, errCode, err := opt.PreCallHook(ctx, request)
 					if err != nil {
-						if err := ctx.ErrorAnswer(fmt.Sprintf("error: %s", err), errCode); err != nil { //!
+						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil { //!
 							return err
 						}
 						return err
@@ -220,7 +220,7 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				if err != nil {
 					switch {
 					case errors.Is(err, contracts.ErrMethodNotFound):
-						if err := ctx.ErrorAnswer(fmt.Sprintf("method \"%s\" not found", request.MethodName), contracts.ErrCodeMethodNotFound); err != nil {
+						if err := ctx.ErrorAnswer(fmt.Sprintf("Method \"%s\" not found", request.MethodName), contracts.ErrCodeMethodNotFound); err != nil {
 							return err
 						}
 
@@ -234,16 +234,16 @@ func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceReques
 				}
 
 				if opt.AfterCallHook != nil {
-					errCode, err := opt.AfterCallHook(ctx, request, response)
+					errMsg, errCode, err := opt.AfterCallHook(ctx, request, response)
 					if err != nil {
-						if err := ctx.ErrorAnswer(err.Error(), errCode); err != nil {
+						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
 							return err
 						}
 						return err
 					}
 				}
 
-				handler(ctx, response)
+				handler(ctx, response, nil)
 
 				return nil
 

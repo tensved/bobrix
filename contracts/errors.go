@@ -8,6 +8,11 @@ var (
 	ErrInputRequired         = errors.New("input is required")
 	ErrNoHealthCheckProvided = errors.New("no healthcheck provided")
 
-	ErrCodeServiceNotFound = "service not found"
-	ErrCodeMethodNotFound  = "method not found"
+	ErrCodeServiceNotFound = 1 // "service not found"
+	ErrCodeMethodNotFound  = 2 // "method not found"
 )
+
+var ErrorResponses = map[int]string{
+	1: "service not found",
+	2: "method not found",
+}
