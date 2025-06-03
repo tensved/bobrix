@@ -5,13 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"regexp"
-	"slices"
-
 	"github.com/tensved/bobrix/mxbot"
+	"log/slog"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"regexp"
+	"slices"
 )
 
 type ContractParser func(evt *event.Event) *ServiceRequest
@@ -292,6 +291,7 @@ func downloadImageMessage(bot Downloader, evt *event.Event) (string, error) {
 // downloadMediaMessage - download media message
 // It returns base64 encoded media data and checks if the mime type is allowed
 func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []string) (string, error) {
+
 	ctx := context.Background()
 
 	info := evt.Content.Raw["info"].(map[string]interface{})
@@ -301,21 +301,7 @@ func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []s
 		return "", fmt.Errorf("%w: %s", ErrInappropriateMimeType, mimeType)
 	}
 
-	var url string
-
-	if file, ok := evt.Content.Raw["file"].(map[string]interface{}); ok {
-		url, ok = file["url"].(string)
-		if !ok {
-			return "", fmt.Errorf("%w: url not found in file structure", ErrDownloadFile)
-		}
-	} else {
-		url, ok = evt.Content.Raw["url"].(string)
-		if !ok {
-			return "", fmt.Errorf("%w: url not found in message content", ErrDownloadFile)
-		}
-	}
-
-	mxcURI, err := id.ContentURIString(url).Parse()
+	mxcURI, err := id.ContentURIString(evt.Content.Raw["url"].(string)).Parse()
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrParseMXCURI, err)
 	}
@@ -328,4 +314,5 @@ func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []s
 	encoded := base64.StdEncoding.EncodeToString(data)
 
 	return encoded, nil
+
 }
