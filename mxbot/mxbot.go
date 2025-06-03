@@ -3,7 +3,6 @@ package mxbot
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -70,10 +69,6 @@ type BotCredentials struct {
 var (
 	defaultSyncerRetryTime = 5 * time.Second
 	defaultTypingTimeout   = 30 * time.Second
-)
-
-var (
-	ErrEncryptMessage = errors.New("failed to encrypt message")
 )
 
 type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot
@@ -268,70 +263,7 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 		msg.SetContentURI(uploadResponse.ContentURI)
 	}
 
-	// Checking if the room is encrypted
-	var encryptionEvent event.EncryptionEventContent
-	err := b.matrixClient.StateEvent(ctx, roomID, event.StateEncryption, "", &encryptionEvent)
-	if err != nil {
-		// If get 404, it means the room is not encrypted.
-		if err.Error() == "M_NOT_FOUND (HTTP 404): Event not found." {
-			// We send a not encrypted message
-			_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
-			if err != nil {
-				return fmt.Errorf("%w: %w", ErrSendMessage, err)
-			}
-			return nil
-		}
-		slog.Error("failed to get room encryption state", "error", err)
-		return fmt.Errorf("%w: %w", ErrSendMessage, err)
-	}
-
-	// Let's check if we have a session for this room
-	session, err := b.machine.CryptoStore.GetOutboundGroupSession(ctx, roomID)
-	if err != nil || session == nil {
-		// If there is no session, create a new one
-		// Get a list of room participants
-		members, err := b.matrixClient.Members(ctx, roomID)
-		if err != nil {
-			slog.Error("failed to get room members", "error", err)
-			return fmt.Errorf("%w: %w", ErrSendMessage, err)
-		}
-
-		// Collecting a list of user IDs
-		userIDs := make([]id.UserID, 0, len(members.Chunk))
-		for _, member := range members.Chunk {
-			if member.StateKey != nil {
-				userIDs = append(userIDs, id.UserID(*member.StateKey))
-			}
-		}
-
-		err = b.machine.ShareGroupSession(ctx, roomID, userIDs)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrSendMessage, err)
-		}
-	}
-
-	// Determine event type based on message type
-	eventType := event.EventMessage
-	if msg.Type().IsMedia() {
-		switch msg.Type() {
-		case event.MsgImage:
-			eventType = event.EventMessage
-		case event.MsgVideo:
-			eventType = event.EventMessage
-		case event.MsgAudio:
-			eventType = event.EventMessage
-		case event.MsgFile:
-			eventType = event.EventMessage
-		}
-	}
-
-	encryptedContent, err := b.machine.EncryptMegolmEvent(ctx, roomID, eventType, msg.AsJSON())
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrSendMessage, err)
-	}
-
-	// If encryption was successful, we send the encrypted message
-	_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventEncrypted, encryptedContent)
+	_, err := b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
 	}
