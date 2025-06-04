@@ -64,7 +64,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 		Do: func(c contracts.HandlerContext) error {
 			ctx := c.Context()
 
-			slog.Info("context history", "ctx", c.Messages())
+			slog.Debug("context history", "ctx", c.Messages())
 
 			conn, _, err := websocket.DefaultDialer.DialContext(
 				ctx,
@@ -146,7 +146,7 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 				return fmt.Errorf("failed to unmarshal OutputMessage JSON: %w", err)
 			}
 
-			slog.Info("Received new message from ADA", "answer", responseMessage.Answer, "RESPONSE", responseMessage)
+			slog.Debug("Received new message from ADA", "answer", responseMessage.Answer, "RESPONSE", responseMessage)
 
 			return c.JSON(map[string]any{
 				"text": responseMessage.Answer,

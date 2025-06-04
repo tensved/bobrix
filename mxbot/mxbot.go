@@ -64,6 +64,7 @@ type BotCredentials struct {
 	Password      string
 	HomeServerURL string
 	PickleKey     []byte
+	ThreadLimit   int
 }
 
 var (
@@ -102,7 +103,7 @@ func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOp
 		return nil, err
 	}
 
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger() //.Level(zerolog.DebugLevel)
 
 	bot := &DefaultBot{
 		matrixClient:  client,
@@ -664,8 +665,6 @@ func (b *DefaultBot) SetOfflineStatus() {
 	b.SetStatus(event.PresenceOffline)
 }
 
-const threadLimit = 120
-
 // GetThreadStory - gets the thread story
 func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*MessagesThread, error) {
 
@@ -676,7 +675,7 @@ func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEven
 		"",
 		mautrix.DirectionBackward,
 		nil,
-		threadLimit,
+		b.credentials.ThreadLimit,
 	)
 	if err != nil {
 		slog.Error("error get messages", "error", err)
@@ -730,7 +729,7 @@ func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEven
 		}
 
 		if rel.Type != event.RelThread || rel.EventID != parentEventID {
-			slog.Info("rel type not thread", "event_id", evt.ID, "rel_event_id", rel.EventID, "rel_type", rel.Type)
+			slog.Debug("rel type not thread", "event_id", evt.ID, "rel_event_id", rel.EventID, "rel_type", rel.Type)
 			continue
 		}
 
