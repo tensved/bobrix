@@ -275,7 +275,7 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 	if err != nil {
 		// If get 404, it means the room is not encrypted.
 		if err.Error() == "M_NOT_FOUND (HTTP 404): Event not found." {
-			// We send a not encrypted message
+			// Send a not encrypted message
 			_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
 			if err != nil {
 				return fmt.Errorf("%w: %w", ErrSendMessage, err)
@@ -331,7 +331,7 @@ func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg mess
 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
 	}
 
-	// If encryption was successful, we send the encrypted message
+	// If encryption was successful, send the encrypted message
 	_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventEncrypted, encryptedContent)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
