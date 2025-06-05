@@ -257,118 +257,118 @@ func (b *DefaultBot) JoinRoom(ctx context.Context, roomID id.RoomID) error {
 }
 
 func (b *DefaultBot) SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error {
-// 	if msg == nil {
-// 		return ErrNilMessage
-// 	}
+	if msg == nil {
+		return ErrNilMessage
+	}
 
-// 	if msg.Type().IsMedia() {
-// 		uploadResponse, err := b.matrixClient.UploadMedia(ctx, msg.AsReqUpload())
-// 		if err != nil {
-// 			return fmt.Errorf("%w: %w", ErrUploadMedia, err)
-// 		}
-// 		msg.SetContentURI(uploadResponse.ContentURI)
-// 	}
+	if msg.Type().IsMedia() {
+		uploadResponse, err := b.matrixClient.UploadMedia(ctx, msg.AsReqUpload())
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrUploadMedia, err)
+		}
+		msg.SetContentURI(uploadResponse.ContentURI)
+	}
 
-// 	// Checking if the room is encrypted
-// 	var encryptionEvent event.EncryptionEventContent
-// 	err := b.matrixClient.StateEvent(ctx, roomID, event.StateEncryption, "", &encryptionEvent)
-// 	if err != nil {
-// 		// If get 404, it means the room is not encrypted.
-// 		if err.Error() == "M_NOT_FOUND (HTTP 404): Event not found." {
-// 			// Send a not encrypted message
-// 			_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
-// 			if err != nil {
-// 				return fmt.Errorf("%w: %w", ErrSendMessage, err)
-// 			}
-// 			return nil
-// 		}
-// 		slog.Error("failed to get room encryption state", "error", err)
-// 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
-// 	}
+	// Checking if the room is encrypted
+	var encryptionEvent event.EncryptionEventContent
+	err := b.matrixClient.StateEvent(ctx, roomID, event.StateEncryption, "", &encryptionEvent)
+	if err != nil {
+		// If get 404, it means the room is not encrypted.
+		if err.Error() == "M_NOT_FOUND (HTTP 404): Event not found." {
+			// Send a not encrypted message
+			_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrSendMessage, err)
+			}
+			return nil
+		}
+		slog.Error("failed to get room encryption state", "error", err)
+		return fmt.Errorf("%w: %w", ErrSendMessage, err)
+	}
 
-// 	// Let's check if we have a session for this room
-// 	session, err := b.machine.CryptoStore.GetOutboundGroupSession(ctx, roomID)
-// 	if err != nil || session == nil {
-// 		// If there is no session, create a new one
-// 		// Get a list of room participants
-// 		members, err := b.matrixClient.Members(ctx, roomID)
-// 		if err != nil {
-// 			slog.Error("failed to get room members", "error", err)
-// 			return fmt.Errorf("%w: %w", ErrSendMessage, err)
-// 		}
+	// Let's check if we have a session for this room
+	session, err := b.machine.CryptoStore.GetOutboundGroupSession(ctx, roomID)
+	if err != nil || session == nil {
+		// If there is no session, create a new one
+		// Get a list of room participants
+		members, err := b.matrixClient.Members(ctx, roomID)
+		if err != nil {
+			slog.Error("failed to get room members", "error", err)
+			return fmt.Errorf("%w: %w", ErrSendMessage, err)
+		}
 
-// 		// Collecting a list of user IDs
-// 		userIDs := make([]id.UserID, 0, len(members.Chunk))
-// 		for _, member := range members.Chunk {
-// 			if member.StateKey != nil {
-// 				userIDs = append(userIDs, id.UserID(*member.StateKey))
-// 			}
-// 		}
+		// Collecting a list of user IDs
+		userIDs := make([]id.UserID, 0, len(members.Chunk))
+		for _, member := range members.Chunk {
+			if member.StateKey != nil {
+				userIDs = append(userIDs, id.UserID(*member.StateKey))
+			}
+		}
 
-// 		err = b.machine.ShareGroupSession(ctx, roomID, userIDs)
-// 		if err != nil {
-// 			return fmt.Errorf("%w: %w", ErrSendMessage, err)
-// 		}
-// 	}
+		err = b.machine.ShareGroupSession(ctx, roomID, userIDs)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrSendMessage, err)
+		}
+	}
 
-// 	// Determine event type based on message type
-// 	eventType := event.EventMessage
-// 	if msg.Type().IsMedia() {
-// 		switch msg.Type() {
-// 		case event.MsgImage:
-// 			eventType = event.EventMessage
-// 		case event.MsgVideo:
-// 			eventType = event.EventMessage
-// 		case event.MsgAudio:
-// 			eventType = event.EventMessage
-// 		case event.MsgFile:
-// 			eventType = event.EventMessage
-// 		}
-// 	}
+	// Determine event type based on message type
+	eventType := event.EventMessage
+	if msg.Type().IsMedia() {
+		switch msg.Type() {
+		case event.MsgImage:
+			eventType = event.EventMessage
+		case event.MsgVideo:
+			eventType = event.EventMessage
+		case event.MsgAudio:
+			eventType = event.EventMessage
+		case event.MsgFile:
+			eventType = event.EventMessage
+		}
+	}
 
-// 	encryptedContent, err := b.machine.EncryptMegolmEvent(ctx, roomID, eventType, msg.AsJSON())
-// 	if err != nil {
-// 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
-// 	}
+	encryptedContent, err := b.machine.EncryptMegolmEvent(ctx, roomID, eventType, msg.AsJSON())
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrSendMessage, err)
+	}
 
-// 	// If encryption was successful, send the encrypted message
-// 	_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventEncrypted, encryptedContent)
-// 	if err != nil {
-// 		return fmt.Errorf("%w: %w", ErrSendMessage, err)
-// 	}
+	// If encryption was successful, send the encrypted message
+	_, err = b.matrixClient.SendMessageEvent(ctx, roomID, event.EventEncrypted, encryptedContent)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrSendMessage, err)
+	}
 
-// 	return nil
-// }
+	return nil
+}
 
-// func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
+func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
 
-// 	if !b.checkFilters(evt) {
-// 		return
-// 	}
+	if !b.checkFilters(evt) {
+		return
+	}
 
-// 	cancelTyping, err := b.LoopTyping(ctx, evt.RoomID)
+	cancelTyping, err := b.LoopTyping(ctx, evt.RoomID)
 
-// 	if err != nil {
-// 		b.logger.Warn().Err(err).Msg("failed to start typing")
-// 	} else {
-// 		defer cancelTyping()
-// 	}
+	if err != nil {
+		b.logger.Warn().Err(err).Msg("failed to start typing")
+	} else {
+		defer cancelTyping()
+	}
 
-// 	eventContext, err := NewDefaultCtx(ctx, evt, b)
+	eventContext, err := NewDefaultCtx(ctx, evt, b)
 
-// 	defer eventContext.SetHandled()
+	defer eventContext.SetHandled()
 
-// 	if err != nil {
-// 		b.logger.Error().Err(err).Msg("failed to create event context")
-// 		return
-// 	}
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to create event context")
+		return
+	}
 
-// 	for _, handler := range b.eventHandlers {
-// 		err := handler.Handle(eventContext)
-// 		if err != nil {
-// 			return
-// 		}
-// 	}
+	for _, handler := range b.eventHandlers {
+		err := handler.Handle(eventContext)
+		if err != nil {
+			return
+		}
+	}
 }
 
 func (b *DefaultBot) startSyncer(ctx context.Context) error {
