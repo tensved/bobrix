@@ -64,7 +64,7 @@ type BotCredentials struct {
 	Password      string
 	HomeServerURL string
 	PickleKey     []byte
-	ThreadLimit   int
+	ThreadLimit   int // thread limit
 }
 
 var (
@@ -738,7 +738,7 @@ func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEven
 		"",
 		mautrix.DirectionBackward,
 		nil,
-		b.credentials.ThreadLimit,
+		b.credentials.ThreadLimit, // 
 	)
 	if err != nil {
 		slog.Error("error get messages", "error", err)
