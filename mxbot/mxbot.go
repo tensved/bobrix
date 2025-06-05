@@ -3,7 +3,6 @@ package mxbot
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -71,10 +70,6 @@ type BotCredentials struct {
 var (
 	defaultSyncerRetryTime = 5 * time.Second
 	defaultTypingTimeout   = 30 * time.Second
-)
-
-var (
-	ErrEncryptMessage = errors.New("failed to encrypt message")
 )
 
 type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot

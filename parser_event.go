@@ -5,13 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"regexp"
-	"slices"
-
 	"github.com/tensved/bobrix/mxbot"
+	"log/slog"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"regexp"
+	"slices"
 )
 
 type ContractParser func(evt *event.Event) *ServiceRequest
@@ -292,6 +291,7 @@ func downloadImageMessage(bot Downloader, evt *event.Event) (string, error) {
 // downloadMediaMessage - download media message
 // It returns base64 encoded media data and checks if the mime type is allowed
 func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []string) (string, error) {
+
 	ctx := context.Background()
 
 	info := evt.Content.Raw["info"].(map[string]interface{})
@@ -330,4 +330,5 @@ func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []s
 	encoded := base64.StdEncoding.EncodeToString(data)
 
 	return encoded, nil
+
 }
