@@ -303,12 +303,14 @@ func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []s
 
 	var url string
 
-	if file, ok := evt.Content.Raw["file"].(map[string]interface{}); ok {
+	if file, ok := evt.Content.Raw["file"].(map[string]interface{}); ok { 
+		// if evt was decrypted
 		url, ok = file["url"].(string)
 		if !ok {
 			return "", fmt.Errorf("%w: url not found in file structure", ErrDownloadFile)
 		}
 	} else {
+		// if evt wasn't encrypted
 		url, ok = evt.Content.Raw["url"].(string)
 		if !ok {
 			return "", fmt.Errorf("%w: url not found in message content", ErrDownloadFile)
