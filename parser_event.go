@@ -2,15 +2,18 @@ package bobrix
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/tensved/bobrix/mxbot"
 	"log/slog"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"regexp"
 	"slices"
+
+	"github.com/tensved/bobrix/mxbot"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 type ContractParser func(evt *event.Event) *ServiceRequest
@@ -288,10 +291,66 @@ func downloadImageMessage(bot Downloader, evt *event.Event) (string, error) {
 	return downloadMediaMessage(bot, evt, allowedMimeTypes)
 }
 
+// decryptMatrixFile decrypts a file encrypted using the Matrix protocol
+func decryptMatrixFile(data []byte, fileInfo map[string]interface{}) ([]byte, error) {
+	// Getting information about the encrypted file
+	iv, ok := fileInfo["iv"].(string)
+	if !ok {
+		return nil, fmt.Errorf("iv not found in file info")
+	}
+
+	key, ok := fileInfo["key"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("key not found in file info")
+	}
+
+	k, ok := key["k"].(string)
+	if !ok {
+		return nil, fmt.Errorf("key.k not found in file info")
+	}
+
+	// Checking the protocol version
+	version, _ := fileInfo["v"].(string)
+	if version != "v2" {
+		return nil, fmt.Errorf("unsupported encryption version: %s", version)
+	}
+
+	// Checking the algorithm
+	alg, _ := key["alg"].(string)
+	if alg != "A256CTR" {
+		return nil, fmt.Errorf("unsupported encryption algorithm: %s", alg)
+	}
+
+	// Decoding base64 with URL-safe format support
+	ivBytes, err := base64.RawURLEncoding.DecodeString(iv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode iv: %w", err)
+	}
+
+	keyBytes, err := base64.RawURLEncoding.DecodeString(k)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode key: %w", err)
+	}
+
+	// Create an AES cipher
+	block, err := aes.NewCipher(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create a CTR mode
+	stream := cipher.NewCTR(block, ivBytes)
+
+	// Расшифровываем данные
+	decrypted := make([]byte, len(data))
+	stream.XORKeyStream(decrypted, data)
+
+	return decrypted, nil
+}
+
 // downloadMediaMessage - download media message
 // It returns base64 encoded media data and checks if the mime type is allowed
 func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []string) (string, error) {
-
 	ctx := context.Background()
 
 	info := evt.Content.Raw["info"].(map[string]interface{})
@@ -302,13 +361,15 @@ func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []s
 	}
 
 	var url string
+	var fileInfo map[string]interface{}
 
-	if file, ok := evt.Content.Raw["file"].(map[string]interface{}); ok { 
+	if file, ok := evt.Content.Raw["file"].(map[string]interface{}); ok {
 		// if evt was decrypted
 		url, ok = file["url"].(string)
 		if !ok {
 			return "", fmt.Errorf("%w: url not found in file structure", ErrDownloadFile)
 		}
+		fileInfo = file
 	} else {
 		// if evt wasn't encrypted
 		url, ok = evt.Content.Raw["url"].(string)
@@ -327,8 +388,14 @@ func downloadMediaMessage(bot Downloader, evt *event.Event, allowedMimeTypes []s
 		return "", fmt.Errorf("%w: %s", ErrDownloadFile, err)
 	}
 
+	// If the file is encrypted, decrypt it
+	if fileInfo != nil {
+		data, err = decryptMatrixFile(data, fileInfo)
+		if err != nil {
+			return "", fmt.Errorf("%w: failed to decrypt file: %v", ErrDownloadFile, err)
+		}
+	}
+
 	encoded := base64.StdEncoding.EncodeToString(data)
-
 	return encoded, nil
-
 }
