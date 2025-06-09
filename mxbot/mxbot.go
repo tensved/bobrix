@@ -64,7 +64,7 @@ type BotCredentials struct {
 	Password      string
 	HomeServerURL string
 	PickleKey     []byte
-	ThreadLimit   int // thread limit
+	ThreadLimit   int  
 }
 
 var (
@@ -103,7 +103,7 @@ func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOp
 		return nil, err
 	}
 
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger() //.Level(zerolog.DebugLevel)
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	bot := &DefaultBot{
 		matrixClient:  client,
@@ -738,7 +738,7 @@ func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEven
 		"",
 		mautrix.DirectionBackward,
 		nil,
-		b.credentials.ThreadLimit, //
+		b.credentials.ThreadLimit,   
 	)
 	if err != nil {
 		slog.Error("error get messages", "error", err)
