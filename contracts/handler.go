@@ -36,9 +36,9 @@ type HandlerFunc func(ctx HandlerContext) error
 
 // Handler represents a method handler with metadata, arguments, and the handler function itself.
 type Handler struct {
-	Name        string         `json:"name"`                  // Name is the name of the handler.
-	Description string         `json:"description,omitempty"` // Description is an optional description of the handler.
-	Args        map[string]any `json:"args"`                  // Args are the arguments for the handler.
+	Name        string            `json:"name"`                  // Name is the name of the handler.
+	Description map[string]string `json:"description,omitempty"` // Description is an optional description of the handler.
+	Args        map[string]any    `json:"args"`                  // Args are the arguments for the handler.
 
 	Do HandlerFunc `json:"-"` // Do is the handler function itself, which is not serialized to JSON.
 }

@@ -9,8 +9,8 @@ import (
 // Contains the name, description and methods
 // Can be used to call methods
 type Service struct {
-	Name        string `json:"name" yaml:"name"`
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Name        string            `json:"name" yaml:"name"`
+	Description map[string]string `json:"description,omitempty" yaml:"description,omitempty"`
 
 	Methods map[string]*Method `json:"methods" yaml:"methods"`
 
@@ -65,7 +65,7 @@ func (s *Service) GetDefaultMethod() *Method {
 // It can be used to print information about the service without sensitive data
 type ServicePublic struct {
 	Name        string                  `json:"name" yaml:"name"`
-	Description string                  `json:"description,omitempty" yaml:"description,omitempty"`
+	Description map[string]string       `json:"description,omitempty" yaml:"description,omitempty"`
 	Methods     map[string]MethodPublic `json:"methods" yaml:"methods"`
 }
 

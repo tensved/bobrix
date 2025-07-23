@@ -13,7 +13,7 @@ const (
 // (prefix, description)
 type CommandConfig struct {
 	Prefix      string
-	Description string
+	Description map[string]string
 }
 
 // Command - command of the bot
@@ -21,7 +21,7 @@ type CommandConfig struct {
 type Command struct {
 	Prefix      string
 	Name        string
-	Description string
+	Description map[string]string
 	Handler     func(ctx Ctx) error
 }
 
@@ -40,7 +40,7 @@ type CommandCtx interface {
 func NewCommand(name string, commandHandler func(ctx CommandCtx) error, config ...CommandConfig) *Command {
 	cfg := CommandConfig{
 		Prefix:      DefaultCommandPrefix,
-		Description: "",
+		Description: map[string]string{},
 	}
 
 	if len(config) > 0 {

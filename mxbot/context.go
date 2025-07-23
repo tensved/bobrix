@@ -2,6 +2,7 @@ package mxbot
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -156,8 +157,17 @@ func (c *DefaultCtx) Get(key string) (any, error) {
 }
 
 // GetString - get a string from the context
+// GetString - get a string from the context safely
 func (c *DefaultCtx) GetString(key string) (string, error) {
-	return c.storage[key].(string), nil
+	val, ok := c.storage[key]
+	if !ok {
+		return "", fmt.Errorf("key %q not found", key)
+	}
+	str, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("value for key %q is not a string", key)
+	}
+	return str, nil
 }
 
 // GetInt - get an int from the context

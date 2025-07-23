@@ -3,26 +3,36 @@ package ada
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/websocket"
-	"github.com/tensved/bobrix/contracts"
 	"log/slog"
 	"net/url"
+
+	"github.com/gorilla/websocket"
+	"github.com/tensved/bobrix/contracts"
 )
 
 func NewADAService(adaHost string) *contracts.Service {
 
 	return &contracts.Service{
-		Name:        "ada",
-		Description: "Ada is an AI language model trained by OpenAI.",
+		Name: "ada",
+		Description: map[string]string{
+			"en": "Ada is an AI language model trained by OpenAI.",
+			"ru": "Ada — это языковая модель искусственного интеллекта, обученная OpenAI.",
+		},
 		Methods: map[string]*contracts.Method{
 			"generate": {
-				Name:        "generate",
-				Description: "Generate text using Ada's language model.",
+				Name: "generate",
+				Description: map[string]string{
+					"en": "Generates text using Ada's language model.",
+					"ru": "Генерирует текст с использованием языковой модели Ады.",
+				},
 				Inputs: []contracts.Input{
 					{
-						Name:        "prompt",
-						Description: "The prompt to generate text from.",
-						Type:        "text",
+						Name: "prompt",
+						Description: map[string]string{
+							"en": "The prompt to generate text from.",
+							"ru": "Запрос на генерацию текста.",
+						},
+						Type: "text",
 					},
 					{
 						Name:         "response_type",
@@ -36,8 +46,11 @@ func NewADAService(adaHost string) *contracts.Service {
 				},
 				Outputs: []contracts.Output{
 					{
-						Name:        "text",
-						Description: "The generated text.",
+						Name: "text",
+						Description: map[string]string{
+							"en": "The generated text.",
+							"ru": "Cгенерированный текст",
+						},
 					},
 				},
 				Handler: NewADAHandler(adaHost),
@@ -56,8 +69,11 @@ func NewADAHandler(adaHost string) *contracts.Handler {
 		Path:   "/",
 	}
 	return &contracts.Handler{
-		Name:        "ada",
-		Description: "Generate text using Ada's language model.",
+		Name: "ada",
+		Description: map[string]string{
+			"en": "Generates text using Ada's language model.",
+			"ru": "Генерирует текст, используя языковую модель Ада.",
+		},
 		Args: map[string]any{
 			"URL": adaURL.String(),
 		},
