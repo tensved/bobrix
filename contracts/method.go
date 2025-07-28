@@ -10,8 +10,8 @@ import (
 // Contains the name, description, inputs and outputs.
 // Also contains the name of the handler function and the handler itself
 type Method struct {
-	Name        string `json:"name" yaml:"name"`
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Name        string            `json:"name" yaml:"name"`
+	Description map[string]string `json:"description,omitempty" yaml:"description,omitempty"`
 
 	Inputs  []Input  `json:"inputs" yaml:"inputs"`
 	Outputs []Output `json:"outputs" yaml:"outputs"`
@@ -208,11 +208,11 @@ func (m *Method) processInputs(inputData map[string]any) (map[string]Input, erro
 // MethodPublic - represents a method in the public API
 // It can be used to print information about the method without sensitive data
 type MethodPublic struct {
-	Name        string         `json:"name" yaml:"name"`
-	Description string         `json:"description,omitempty" yaml:"description,omitempty"`
-	Inputs      []InputPublic  `json:"inputs" yaml:"inputs"`
-	Outputs     []OutputPublic `json:"outputs" yaml:"outputs"`
-	IsDefault   bool           `json:"is_default" yaml:"is_default"`
+	Name        string            `json:"name" yaml:"name"`
+	Description map[string]string `json:"description,omitempty" yaml:"description,omitempty"`
+	Inputs      []InputPublic     `json:"inputs" yaml:"inputs"`
+	Outputs     []OutputPublic    `json:"outputs" yaml:"outputs"`
+	IsDefault   bool              `json:"is_default" yaml:"is_default"`
 }
 
 func (m *Method) AsPublic() MethodPublic {
