@@ -3,11 +3,12 @@ package mxbot
 import (
 	"context"
 	"log/slog"
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
 	"slices"
 	"strings"
 	"time"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
 )
 
 // Filter - message filter

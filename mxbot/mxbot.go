@@ -54,6 +54,12 @@ type Bot interface {
 	SetIdleStatus()
 	SetOnlineStatus()
 	SetOfflineStatus()
+
+	GetJoinedRoomsList(ctx context.Context) ([]id.RoomID, error)
+	GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int) ([]string, error)
+	GetMessagesFromRoomByDuration(ctx context.Context, roomID id.RoomID, duration time.Duration, numMessages int, filter *mautrix.FilterPart) ([]*event.Event, error)
+
+	DecryptEvent(ctx context.Context, evt *event.Event) (*event.Event, error)
 }
 
 // BotCredentials - credentials of the bot for Matrix
@@ -64,7 +70,7 @@ type BotCredentials struct {
 	Password      string
 	HomeServerURL string
 	PickleKey     []byte
-	ThreadLimit   int  
+	ThreadLimit   int
 }
 
 var (
@@ -366,6 +372,10 @@ func (b *DefaultBot) eventHandler(ctx context.Context, evt *event.Event) {
 	}
 }
 
+func (b *DefaultBot) DecryptEvent(ctx context.Context, evt *event.Event) (*event.Event, error) {
+	return b.machine.DecryptMegolmEvent(ctx, evt)
+}
+
 func (b *DefaultBot) startSyncer(ctx context.Context) error {
 	syncer := b.matrixClient.Syncer.(*mautrix.DefaultSyncer)
 
@@ -463,10 +473,8 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 // and register the bot if it is not registered
 // also refreshes the access token if it is expired
 func (b *DefaultBot) prepareBot(ctx context.Context) error {
-	if err := b.authBot(ctx); err != nil {
-		if err := b.registerBot(ctx); err != nil {
-			return err
-		}
+	if err := b.authorizeBot(ctx); err != nil {
+		return err
 	}
 
 	if b.displayName != "" {
@@ -498,6 +506,15 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		}
 	}(ctx)
 
+	return nil
+}
+
+func (b *DefaultBot) authorizeBot(ctx context.Context) error {
+	if err := b.authBot(ctx); err != nil {
+		if err := b.registerBot(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -738,7 +755,7 @@ func (b *DefaultBot) GetThread(ctx context.Context, roomID id.RoomID, parentEven
 		"",
 		mautrix.DirectionBackward,
 		nil,
-		b.credentials.ThreadLimit,   
+		b.credentials.ThreadLimit,
 	)
 	if err != nil {
 		slog.Error("error get messages", "error", err)
@@ -878,4 +895,66 @@ func (b *DefaultBot) initCrypto(ctx context.Context) error {
 	b.logger.Info().Interface("identity", identity).Msg("crypto initialized")
 
 	return nil
+}
+
+func (b *DefaultBot) GetJoinedRoomsList(ctx context.Context) ([]id.RoomID, error) {
+	rooms, err := b.matrixClient.JoinedRooms(ctx)
+	return rooms.JoinedRooms, err
+}
+
+func (b *DefaultBot) GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int) ([]string, error) {
+	filter := &mautrix.FilterPart{
+		Types: []event.Type{event.EventMessage},
+	}
+
+	resp, err := b.matrixClient.Messages(ctx, roomID, "", "", 'b', filter, numMessages)
+	if err != nil {
+		return []string{}, err
+	}
+
+	messages := make([]string, 0)
+	for _, evt := range resp.Chunk {
+		if evt.Type == event.EventMessage {
+			if evt.Content.Raw["msgtype"] == "m.text" {
+				messages = append(messages, fmt.Sprintf("%s: %s\n", evt.Sender, evt.Content.Raw["body"]))
+			}
+		}
+	}
+	return messages, nil
+}
+
+func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID id.RoomID, duration time.Duration, numMessages int, filter *mautrix.FilterPart) ([]*event.Event, error) {
+	timeAgo := time.Now().Add(-1 * duration).UnixMilli()
+
+	syncResp, err := b.matrixClient.SyncRequest(ctx, 0, "", "", false, "")
+	if err != nil {
+		return nil, err
+	}
+	from := syncResp.NextBatch
+
+	var allMessages []*event.Event
+
+	for {
+		msgsResp, err := b.matrixClient.Messages(ctx, roomID, from, "", 'b', filter, numMessages)
+		if err != nil {
+			return nil, err
+		}
+
+		stop := false
+		for _, ev := range msgsResp.Chunk {
+			if ev.Timestamp <= timeAgo {
+				stop = true
+				break
+			}
+			allMessages = append(allMessages, ev)
+		}
+
+		if stop || msgsResp.End == "" {
+			break
+		}
+
+		from = msgsResp.End
+	}
+
+	return allMessages, nil
 }
