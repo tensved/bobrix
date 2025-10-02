@@ -156,7 +156,6 @@ func (c *DefaultCtx) Get(key string) (any, error) {
 	return c.storage[key], nil
 }
 
-// GetString - get a string from the context
 // GetString - get a string from the context safely
 func (c *DefaultCtx) GetString(key string) (string, error) {
 	val, ok := c.storage[key]
