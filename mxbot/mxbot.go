@@ -56,7 +56,7 @@ type Bot interface {
 	SetOfflineStatus()
 
 	GetJoinedRoomsList(ctx context.Context) ([]id.RoomID, error)
-	GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int, filter *mautrix.FilterPart) ([]string, error)
+	GetMessagesFromRoomByNumber(ctx context.Context, roomID id.RoomID, numMessages int, filter *mautrix.FilterPart) ([]*event.Event, error)
 	GetMessagesFromRoomByDuration(ctx context.Context, roomID id.RoomID, duration time.Duration, numMessages int, filter *mautrix.FilterPart) ([]*event.Event, error)
 
 	DecryptEvent(ctx context.Context, evt *event.Event) (*event.Event, error)
@@ -902,20 +902,16 @@ func (b *DefaultBot) GetJoinedRoomsList(ctx context.Context) ([]id.RoomID, error
 	return rooms.JoinedRooms, err
 }
 
-func (b *DefaultBot) GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int, filter *mautrix.FilterPart) ([]string, error) {
+func (b *DefaultBot) GetMessagesFromRoomByNumber(ctx context.Context, roomID id.RoomID, numMessages int, filter *mautrix.FilterPart) ([]*event.Event, error) {
 	resp, err := b.matrixClient.Messages(ctx, roomID, "", "", 'b', filter, numMessages)
 	if err != nil {
-		return []string{}, err
+		return []*event.Event{}, err
 	}
 
-	messages := make([]string, 0, len(resp.Chunk))
+	messages := make([]*event.Event, 0, len(resp.Chunk))
 	for i := len(resp.Chunk) - 1; i >= 0; i-- { // evts ascending order by the time
-		evt := resp.Chunk[i]
-		if evt.Type == event.EventMessage {
-			if evt.Content.Raw["msgtype"] == "m.text" {
-				messages = append(messages, fmt.Sprintf("%s: %s\n", evt.Sender, evt.Content.Raw["body"]))
-			}
-		}
+		messages = append(messages, resp.Chunk[i])
+
 	}
 	return messages, nil
 }
@@ -938,8 +934,7 @@ func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID i
 		}
 
 		stop := false
-		for i := len(msgsResp.Chunk) - 1; i >= 0; i-- { // evts ascending order by the time
-			evt := msgsResp.Chunk[i]
+		for _, evt := range msgsResp.Chunk {
 			if evt.Timestamp <= timeAgo {
 				stop = true
 				break
@@ -953,6 +948,8 @@ func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID i
 
 		from = msgsResp.End
 	}
+
+	slices.Reverse(allMessages) // evts ascending order by the time
 
 	return allMessages, nil
 }
