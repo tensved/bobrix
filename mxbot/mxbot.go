@@ -56,7 +56,7 @@ type Bot interface {
 	SetOfflineStatus()
 
 	GetJoinedRoomsList(ctx context.Context) ([]id.RoomID, error)
-	GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int) ([]string, error)
+	GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int, filter *mautrix.FilterPart) ([]string, error)
 	GetMessagesFromRoomByDuration(ctx context.Context, roomID id.RoomID, duration time.Duration, numMessages int, filter *mautrix.FilterPart) ([]*event.Event, error)
 
 	DecryptEvent(ctx context.Context, evt *event.Event) (*event.Event, error)
@@ -902,18 +902,15 @@ func (b *DefaultBot) GetJoinedRoomsList(ctx context.Context) ([]id.RoomID, error
 	return rooms.JoinedRooms, err
 }
 
-func (b *DefaultBot) GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int) ([]string, error) {
-	filter := &mautrix.FilterPart{
-		Types: []event.Type{event.EventMessage},
-	}
-
+func (b *DefaultBot) GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, numMessages int, filter *mautrix.FilterPart) ([]string, error) {
 	resp, err := b.matrixClient.Messages(ctx, roomID, "", "", 'b', filter, numMessages)
 	if err != nil {
 		return []string{}, err
 	}
 
-	messages := make([]string, 0)
-	for _, evt := range resp.Chunk {
+	messages := make([]string, 0, len(resp.Chunk))
+	for i := len(resp.Chunk) - 1; i >= 0; i-- {
+		evt := resp.Chunk[i]
 		if evt.Type == event.EventMessage {
 			if evt.Content.Raw["msgtype"] == "m.text" {
 				messages = append(messages, fmt.Sprintf("%s: %s\n", evt.Sender, evt.Content.Raw["body"]))
@@ -941,12 +938,13 @@ func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID i
 		}
 
 		stop := false
-		for _, ev := range msgsResp.Chunk {
-			if ev.Timestamp <= timeAgo {
+		for i := len(msgsResp.Chunk) - 1; i >= 0; i-- {
+			evt := msgsResp.Chunk[i]
+			if evt.Timestamp <= timeAgo {
 				stop = true
 				break
 			}
-			allMessages = append(allMessages, ev)
+			allMessages = append(allMessages, evt)
 		}
 
 		if stop || msgsResp.End == "" {
