@@ -909,7 +909,7 @@ func (b *DefaultBot) GetMessagesFromRoom(ctx context.Context, roomID id.RoomID, 
 	}
 
 	messages := make([]string, 0, len(resp.Chunk))
-	for i := len(resp.Chunk) - 1; i >= 0; i-- {
+	for i := len(resp.Chunk) - 1; i >= 0; i-- { // evts ascending order by the time
 		evt := resp.Chunk[i]
 		if evt.Type == event.EventMessage {
 			if evt.Content.Raw["msgtype"] == "m.text" {
@@ -938,7 +938,7 @@ func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID i
 		}
 
 		stop := false
-		for i := len(msgsResp.Chunk) - 1; i >= 0; i-- {
+		for i := len(msgsResp.Chunk) - 1; i >= 0; i-- { // evts ascending order by the time
 			evt := msgsResp.Chunk[i]
 			if evt.Timestamp <= timeAgo {
 				stop = true
