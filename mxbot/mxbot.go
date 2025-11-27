@@ -473,6 +473,7 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 // and register the bot if it is not registered
 // also refreshes the access token if it is expired
 func (b *DefaultBot) prepareBot(ctx context.Context) error {
+	// Login only once
 	if err := b.authorizeBot(ctx); err != nil {
 		return err
 	}
@@ -483,22 +484,24 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		}
 	}
 
-	// Initialize cryptography only after successful authorization
+	// Initialize crypto after successful login
 	if err := b.initCrypto(ctx); err != nil {
 		return fmt.Errorf("failed to init crypto: %w", err)
 	}
 
-	// Starting a periodic token update
 	go func(ctx context.Context) {
-		ticker := time.NewTicker(3 * time.Minute)
+		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				if err := b.authBot(ctx); err != nil {
-					b.logger.Error().Err(err).Msg("failed to auth bot")
+				if !b.IsTokenValid(ctx) {
+					if err := b.authBot(ctx); err != nil {
+						b.logger.Error().Err(err).Msg("failed to auth bot")
+					}
 				}
+
 			case <-ctx.Done():
 				b.logger.Info().Msg("auth ticker stopped")
 				return
@@ -507,6 +510,20 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 	}(ctx)
 
 	return nil
+}
+
+func (b *DefaultBot) IsTokenValid(ctx context.Context) bool {
+	_, err := b.matrixClient.Whoami(ctx)
+	if err == nil {
+		return true
+	}
+
+	httpErr, ok := err.(mautrix.HTTPError)
+	if ok && httpErr.RespError.StatusCode == 401 {
+		return false
+	}
+
+	return true
 }
 
 func (b *DefaultBot) authorizeBot(ctx context.Context) error {
