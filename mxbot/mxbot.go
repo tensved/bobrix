@@ -473,7 +473,6 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 // and register the bot if it is not registered
 // also refreshes the access token if it is expired
 func (b *DefaultBot) prepareBot(ctx context.Context) error {
-	// Login only once
 	if err := b.authorizeBot(ctx); err != nil {
 		return err
 	}
