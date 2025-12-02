@@ -455,10 +455,31 @@ func (b *DefaultBot) startSyncer(ctx context.Context) error {
 			case <-ctx.Done():
 				b.logger.Info().Msg("syncer stopped by context")
 				return
+
 			default:
 				b.logger.Info().Msg("start sync")
 				err := b.matrixClient.SyncWithContext(ctx)
-				if err != nil && ctx.Err() == nil {
+
+				if ctx.Err() != nil {
+					return
+				}
+
+				if err != nil {
+					httpErr, ok := err.(mautrix.HTTPError)
+
+					if ok && httpErr.RespError.StatusCode == 401 {
+						b.logger.Warn().Msg("token expired, reauth needed")
+
+						if err := b.authBot(ctx); err != nil {
+							b.logger.Error().Err(err).Msg("failed to reauth bot")
+							time.Sleep(b.syncerTimeRetry)
+							continue
+						}
+
+						b.logger.Info().Msg("reauth success, restarting sync")
+						continue
+					}
+
 					b.logger.Error().Err(err).Msg("failed to sync")
 					time.Sleep(b.syncerTimeRetry)
 				}
@@ -488,41 +509,7 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 		return fmt.Errorf("failed to init crypto: %w", err)
 	}
 
-	go func(ctx context.Context) {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				if !b.IsTokenValid(ctx) {
-					if err := b.authBot(ctx); err != nil {
-						b.logger.Error().Err(err).Msg("failed to auth bot")
-					}
-				}
-
-			case <-ctx.Done():
-				b.logger.Info().Msg("auth ticker stopped")
-				return
-			}
-		}
-	}(ctx)
-
 	return nil
-}
-
-func (b *DefaultBot) IsTokenValid(ctx context.Context) bool {
-	_, err := b.matrixClient.Whoami(ctx)
-	if err == nil {
-		return true
-	}
-
-	httpErr, ok := err.(mautrix.HTTPError)
-	if ok && httpErr.RespError.StatusCode == 401 {
-		return false
-	}
-
-	return true
 }
 
 func (b *DefaultBot) authorizeBot(ctx context.Context) error {
