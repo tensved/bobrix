@@ -99,6 +99,11 @@ func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) con
 		"event": evt,
 	}
 
+	if evt == nil {
+		slog.Warn("event is nil, skipping metadata injection")
+		return context.WithValue(ctx, MetadataKeyContext, metadata)
+	}
+
 	if msg := evt.Content.AsMessage(); msg != nil {
 		if rel := msg.RelatesTo; rel != nil {
 			metadata["tread_id"] = rel.EventID
@@ -108,7 +113,13 @@ func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) con
 				slog.Error("error get main event", "error", err)
 			}
 
-			metadata["thread.answer_to"] = mainEvent.Content.Raw[AnswerToCustomField]
+			if mainEvent != nil {
+				if answerTo, ok := mainEvent.Content.Raw[AnswerToCustomField]; ok {
+					metadata["thread.answer_to"] = answerTo
+				}
+			} else {
+				slog.Warn("main event is nil, skipping thread.answer_to")
+			}
 		}
 	}
 
