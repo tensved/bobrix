@@ -71,6 +71,8 @@ type BotCredentials struct {
 	HomeServerURL string
 	PickleKey     []byte
 	ThreadLimit   int
+	AuthMode      AuthMode
+	ASToken       string
 }
 
 var (
@@ -120,6 +122,9 @@ func NewDefaultBot(botName string, botCredentials *BotCredentials, opts ...BotOp
 
 		syncerTimeRetry: defaultSyncerRetryTime,
 		typingTimeout:   defaultTypingTimeout,
+
+		authMode: botCredentials.AuthMode,
+		asToken:  botCredentials.ASToken,
 	}
 
 	defaultFilters := []Filter{
@@ -166,6 +171,9 @@ type DefaultBot struct {
 	typingTimeout   time.Duration
 
 	cancelFunc context.CancelFunc
+
+	authMode AuthMode
+	asToken  string
 }
 
 func (b *DefaultBot) Name() string {
@@ -512,7 +520,26 @@ func (b *DefaultBot) prepareBot(ctx context.Context) error {
 	return nil
 }
 
+type AuthMode string
+
+const (
+	AuthModeLogin AuthMode = "login"
+	AuthModeAS    AuthMode = "as"
+)
+
 func (b *DefaultBot) authorizeBot(ctx context.Context) error {
+	if b.authMode == AuthModeAS {
+		b.matrixClient.UserID = id.UserID(b.credentials.Username)
+		b.matrixClient.AccessToken = b.asToken
+		b.matrixClient.DeviceID = "AS_DEVICE"
+
+		return nil
+	}
+
+	return b.authorizeBotViaLogin(ctx)
+}
+
+func (b *DefaultBot) authorizeBotViaLogin(ctx context.Context) error {
 	if err := b.authBot(ctx); err != nil {
 		if err := b.registerBot(ctx); err != nil {
 			return err
