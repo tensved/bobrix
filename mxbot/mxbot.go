@@ -528,7 +528,7 @@ const (
 )
 
 func (b *DefaultBot) authorizeBot(ctx context.Context) error {
-	userID := "@"+b.credentials.Username+":"+b.matrixClient.HomeserverURL.Host
+	userID := "@" + b.credentials.Username + ":" + b.matrixClient.HomeserverURL.Host
 
 	if b.authMode == AuthModeAS {
 		b.matrixClient.UserID = id.UserID(userID)
