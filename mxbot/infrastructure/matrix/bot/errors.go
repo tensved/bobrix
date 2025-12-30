@@ -1,4 +1,4 @@
-package mxbot
+package bot
 
 import "errors"
 

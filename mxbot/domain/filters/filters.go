@@ -1,13 +1,11 @@
-package mxbot
+package filters
 
 import (
 	"context"
-	"log/slog"
 	"slices"
 	"strings"
 	"time"
 
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
 
@@ -44,9 +42,9 @@ func FilterAll(filters ...Filter) Filter {
 
 // FilterNotMe - filter for messages from other users
 // (ignores messages from the bot itself)
-func FilterNotMe(matrixClient *mautrix.Client) Filter {
+func FilterNotMe(bot BotInfo) Filter {
 	return func(evt *event.Event) bool {
-		return evt.Sender != matrixClient.UserID
+		return evt.Sender != bot.UserID()
 	}
 }
 
@@ -57,7 +55,7 @@ type FilterAfterStartOptions struct {
 
 // FilterAfterStart - filter for messages after start time
 // (ignores messages that were sent before start time)
-func FilterAfterStart(bot Bot, opts ...FilterAfterStartOptions) Filter {
+func FilterAfterStart(bot BotInviter, opts ...FilterAfterStartOptions) Filter {
 	params := FilterAfterStartOptions{
 		StartTime:      time.Now(),
 		ProcessInvites: false,
@@ -79,11 +77,9 @@ func FilterAfterStart(bot Bot, opts ...FilterAfterStartOptions) Filter {
 }
 
 // FilterNotInRoom - filter for messages that bot is not in the room
-func FilterNotInRoom(bot Bot) Filter {
+func FilterNotInRoom(bot BotClient) Filter {
 	return func(evt *event.Event) bool {
-
 		_, err := bot.Client().JoinedMembers(context.Background(), evt.RoomID)
-
 		return err != nil
 	}
 }
@@ -111,22 +107,19 @@ func FilterCommand(command *Command) Filter {
 
 // FilterPrivateRoom - filter for private rooms (there are only two people in the room: bot + user)
 // return true if room is private
-func FilterPrivateRoom(bot Bot) Filter {
+func FilterPrivateRoom(bot BotClient) Filter {
 	return func(evt *event.Event) bool {
-
 		resp, err := bot.Client().JoinedMembers(context.Background(), evt.RoomID)
 		if err != nil {
-			slog.Error("cannot get room joined members", "err", err, "event_id", evt.ID)
 			return false
 		}
-
 		return len(resp.Joined) == 2
 	}
 }
 
 // FilterTagMe - filter for messages that bot is tagged
 // return true if bot is tagged
-func FilterTagMe(bot Bot) Filter {
+func FilterTagMe(bot BotInfo) Filter {
 
 	return func(evt *event.Event) bool {
 
@@ -148,7 +141,7 @@ func FilterTagMe(bot Bot) Filter {
 
 // FilterTageMeOrPrivate - filter for messages that are tagged or sent in a private room
 // return true if message is tagged or sent in a private room
-func FilterTageMeOrPrivate(bot Bot) Filter {
+func FilterTageMeOrPrivate(bot BotInviter) Filter {
 	return func(evt *event.Event) bool {
 		return FilterTagMe(bot)(evt) || FilterPrivateRoom(bot)(evt)
 	}
@@ -232,19 +225,11 @@ func FilterMembershipInvite() Filter {
 
 // FilterInviteMe - filter for invite messages that are sent to the bot
 // check if message type is event.MembershipInvite and state key is the bot's full name
-func FilterInviteMe(bot Bot) Filter {
-	inviteEventFilter := FilterMembershipInvite()
+func FilterInviteMe(bot BotInfo) Filter {
 	return func(evt *event.Event) bool {
-		if !inviteEventFilter(evt) {
+		if evt.StateKey == nil {
 			return false
 		}
-
-		stateKey := evt.StateKey
-
-		if stateKey == nil {
-			return false
-		}
-
-		return *stateKey == bot.FullName()
+		return *evt.StateKey == bot.FullName()
 	}
 }

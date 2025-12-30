@@ -1,4 +1,4 @@
-package mxbot
+package domain
 
 import (
 	"maunium.net/go/mautrix/event"

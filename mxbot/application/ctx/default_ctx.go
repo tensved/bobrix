@@ -1,4 +1,4 @@
-package mxbot
+package ctx // ok
 
 import (
 	"context"
@@ -6,43 +6,14 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/tensved/bobrix/mxbot/domain/ctx"
+	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix/event"
+	domainbot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-const (
-	BobrixCustomField   = "bobrix"
-	AnswerToCustomField = BobrixCustomField + ".answer_to"
-)
-
-// Ctx - context of the bot
-// provides access to the bot and event
-// and allows to set and get storage in the context
-// and to answer to the event
-type Ctx interface {
-	Event() *event.Event
-
-	Get(key string) (any, error)
-	GetString(key string) (string, error)
-	GetInt(key string) (int, error)
-
-	Context() context.Context
-
-	Thread() *MessagesThread
-	SetThread(thread *MessagesThread)
-
-	Bot() Bot
-
-	Answer(msg messages.Message) error
-	TextAnswer(text string) error
-	ErrorAnswer(errorText string, errorType int) error
-
-	IsHandled() bool
-	SetHandled()
-	IsHandledWithUnlocker() (bool, func())
-}
-
-var _ Ctx = (*DefaultCtx)(nil)
+var _ ctx.Ctx = (*DefaultCtx)(nil)
 
 type handlesStatus struct {
 	isHandled bool
@@ -79,13 +50,14 @@ func (s *handlesStatus) Set(status bool) {
 
 type DefaultCtx struct {
 	event   *event.Event
-	storage map[string]any
-	thread  *MessagesThread
-	mx      *sync.Mutex
-
 	context context.Context
 
-	bot Bot
+	bot domainbot.BotMessaging
+
+	thread *threads.MessagesThread
+
+	storage map[string]any
+	mx      *sync.Mutex
 
 	handlesStatus *handlesStatus
 }
@@ -94,7 +66,11 @@ type MetadataKey struct{}
 
 var MetadataKeyContext = MetadataKey{}
 
-func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) context.Context {
+func injectMetadataInContext(
+	ctx context.Context,
+	evt *event.Event,
+	loader domainbot.EventLoader,
+) context.Context {
 	metadata := map[string]any{
 		"event": evt,
 	}
@@ -106,19 +82,21 @@ func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) con
 
 	if msg := evt.Content.AsMessage(); msg != nil {
 		if rel := msg.RelatesTo; rel != nil {
-			metadata["tread_id"] = rel.EventID
+			metadata["thread_id"] = rel.EventID
 
-			mainEvent, err := bot.Client().GetEvent(ctx, evt.RoomID, rel.EventID)
-			if err != nil {
-				slog.Error("error get main event", "error", err)
-			}
-
-			if mainEvent != nil {
-				if answerTo, ok := mainEvent.Content.Raw[AnswerToCustomField]; ok {
-					metadata["thread.answer_to"] = answerTo
+			if loader != nil {
+				mainEvent, err := loader.GetEvent(ctx, evt.RoomID, rel.EventID)
+				if err != nil {
+					slog.Error("error get main event", "error", err)
 				}
-			} else {
-				slog.Warn("main event is nil, skipping thread.answer_to")
+
+				if mainEvent != nil {
+					if answerTo, ok := mainEvent.Content.Raw[AnswerToCustomField]; ok {
+						metadata["thread.answer_to"] = answerTo
+					}
+				} else {
+					slog.Warn("main event is nil, skipping thread.answer_to")
+				}
 			}
 		}
 	}
@@ -126,34 +104,36 @@ func injectMetadataInContext(ctx context.Context, evt *event.Event, bot Bot) con
 	return context.WithValue(ctx, MetadataKeyContext, metadata)
 }
 
-func NewDefaultCtx(ctx context.Context, event *event.Event, bot Bot) (*DefaultCtx, error) {
+func NewDefaultCtx(
+	ctx context.Context,
+	event *event.Event,
+	bot domainbot.BotMessaging,
+	threadProvider domainbot.Threads,
+	eventLoader domainbot.EventLoader,
+) (*DefaultCtx, error) {
 
-	var thread *MessagesThread
-
-	if bot.IsThreadEnabled() {
+	var thread *threads.MessagesThread
+	if threadProvider != nil && threadProvider.IsThreadEnabled() {
 		var err error
-		thread, err = bot.GetThreadByEvent(ctx, event)
+		thread, err = threadProvider.GetThreadByEvent(ctx, event)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	ctx = injectMetadataInContext(ctx, event, bot)
+	ctx = injectMetadataInContext(ctx, event, eventLoader)
 
-	defaultCtx := &DefaultCtx{
+	return &DefaultCtx{
 		context: ctx,
 		event:   event,
-		storage: make(map[string]any),
-		thread:  thread,
 		bot:     bot,
+		thread:  thread,
+		storage: map[string]any{},
 		mx:      &sync.Mutex{},
 		handlesStatus: &handlesStatus{
-			isHandled: false,
-			mx:        &sync.RWMutex{},
+			mx: &sync.RWMutex{},
 		},
-	}
-
-	return defaultCtx, nil
+	}, nil
 }
 
 // Event - get the event from the context.
@@ -186,7 +166,7 @@ func (c *DefaultCtx) GetInt(key string) (int, error) {
 }
 
 // Bot - get the bot from the context
-func (c *DefaultCtx) Bot() Bot {
+func (c *DefaultCtx) Bot() domainbot.BotMessaging {
 	return c.bot
 }
 
@@ -237,10 +217,10 @@ func (c *DefaultCtx) SetHandled() {
 	c.handlesStatus.Set(true)
 }
 
-func (c *DefaultCtx) Thread() *MessagesThread {
+func (c *DefaultCtx) Thread() *threads.MessagesThread {
 	return c.thread
 }
 
-func (c *DefaultCtx) SetThread(thread *MessagesThread) {
+func (c *DefaultCtx) SetThread(thread *threads.MessagesThread) {
 	c.thread = thread
 }
