@@ -1,4 +1,4 @@
-package bot // nok
+package bot
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-var _ domainbot.Crypto = (*MatrixCrypto)(nil)
+var _ domainbot.BotCrypto = (*MatrixCrypto)(nil)
 
 type MatrixCrypto struct {
 	olmMachine OlmMachine

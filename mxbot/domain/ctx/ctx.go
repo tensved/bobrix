@@ -14,14 +14,19 @@ type Ctx interface {
 	Context() context.Context
 
 	Get(key string) (any, error)
+	GetString(key string) (string, error)
+	GetInt(key string) (int, error)
 
 	Thread() *threads.MessagesThread
-	SetThread(*threads.MessagesThread)
+	SetThread(thread *threads.MessagesThread)
 
 	Bot() bot.BotMessaging
 
-	Answer(messages.Message) error
+	Answer(msg messages.Message) error
+	TextAnswer(text string) error
+	ErrorAnswer(errorText string, errorType int) error
 
 	IsHandled() bool
 	SetHandled()
+	IsHandledWithUnlocker() (bool, func())
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	// "github.com/tensved/bobrix/mxbot"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 )

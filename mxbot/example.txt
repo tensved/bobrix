@@ -1,0 +1,19 @@
+// cmd/bot/main.go
+package main
+
+func main() {
+	cfg := loadConfig()
+
+	b, err := constructor.NewMatrixBot(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	app := application.New(
+		b, // ⬅️ только интерфейсы
+	)
+
+	app.Run()
+}
+
+main.go — единственное место, где infra видна

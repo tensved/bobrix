@@ -1,4 +1,4 @@
-package domain
+package threads
 
 import (
 	"maunium.net/go/mautrix/event"

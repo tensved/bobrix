@@ -1,4 +1,4 @@
-package bot // nook
+package typing
 
 import (
 	"context"
@@ -40,7 +40,7 @@ var typing = typingData{
 // LoopTyping - Starts and stops typing on the room. Typing is sent every typingTimeout
 // it will be stopped if the context is cancelled or if an error occurs
 // it returns a function that can be used to stop the typing
-func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
+func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
 
 	ticker := time.NewTicker(b.typingTimeout)
 
@@ -80,4 +80,16 @@ func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTy
 		close(cancel)
 	}, nil
 
+}
+
+// StartTyping - Starts typing on the room
+func (b *Service) StartTyping(ctx context.Context, roomID id.RoomID) error {
+	_, err := b.client.UserTyping(ctx, roomID, true, b.typingTimeout)
+	return err
+}
+
+// StopTyping - Stops typing on the room
+func (b *Service) StopTyping(ctx context.Context, roomID id.RoomID) error {
+	_, err := b.client.UserTyping(ctx, roomID, false, b.typingTimeout)
+	return err
 }
