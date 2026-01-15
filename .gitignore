@@ -3,5 +3,6 @@
 .DS_Store
 cmd
 mxbot2.go
+example.txt
 
 *~
