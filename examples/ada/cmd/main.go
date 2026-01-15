@@ -2,25 +2,28 @@ package main
 
 import (
 	"context"
-	"github.com/tensved/bobrix"
-	"github.com/tensved/bobrix/examples/ada"
-	"github.com/tensved/bobrix/mxbot"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/tensved/bobrix"
+	"github.com/tensved/bobrix/examples/ada"
+	"github.com/tensved/bobrix/mxbot"
 )
 
 func main() {
 
 	engine := bobrix.NewEngine()
 
-	botCredentials := &mxbot.BotCredentials{
-		Username:      os.Getenv("MX_BOT_USERNAME"),
-		Password:      os.Getenv("MX_BOT_PASSWORD"),
-		HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
+	cfg := &mxbot.Config{
+		Credentials: &mxbot.BotCredentials{
+			Username:      os.Getenv("MX_BOT_USERNAME"),
+			Password:      os.Getenv("MX_BOT_PASSWORD"),
+			HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
+		},
 	}
-	adaBot, err := ada.NewAdaBot(botCredentials)
+	adaBot, err := ada.NewAdaBot(cfg)
 	if err != nil {
 		panic(err)
 	}

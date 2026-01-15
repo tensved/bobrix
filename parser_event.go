@@ -205,7 +205,7 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
-		mxbot.FilterTageMeOrPrivate(opts.Bot),
+		mxbot.FilterTagMeOrPrivate(opts.Bot),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
@@ -229,7 +229,7 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 }
 
 type ImageMessageParserOpts struct {
-	Downloader  mxbot.Bot
+	Downloader  mxbot.BotMedia
 	ServiceName string
 	MethodName  string
 	InputName   string
