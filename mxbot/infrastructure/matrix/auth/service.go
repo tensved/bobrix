@@ -1,4 +1,4 @@
-package bot // nok
+package auth
 
 import (
 	"context"
@@ -6,51 +6,48 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 )
 
-type AuthMode string
+var _ bot.BotAuth = (*Service)(nil)
 
-const (
-	AuthModeLogin AuthMode = "login"
-	AuthModeAS    AuthMode = "as"
-)
-
-type authService struct {
+type Service struct {
 	client *mautrix.Client
-	creds  *BotCredentials
+	creds  *config.BotCredentials
 	name   string
 }
 
-func newAuthService(c *mautrix.Client, creds *BotCredentials, name string) *authService {
-	return &authService{client: c, creds: creds, name: name}
+func New(client *mautrix.Client, creds *config.BotCredentials, name string) *Service {
+	return &Service{
+		client: client,
+		creds:  creds,
+		name:   name,
+	}
 }
 
-func (a *authService) AuthorizeBot(ctx context.Context) error {
+func (a *Service) Authorize(ctx context.Context) error {
 	switch a.creds.AuthMode {
-	case AuthModeAS:
-		return a.authorizeAs(ctx)
+	case config.AuthModeAS:
+		return a.authorizeAS()
 	default:
-		return a.authorizeBotViaLogin(ctx)
+		return a.authorizeLogin(ctx)
 	}
 }
 
-func (a *authService) authorizeAs(ctx context.Context) error {
-	userID := "@" + a.credentials.Username + ":" + a.matrixClient.HomeserverURL.Host
+func (a *Service) authorizeAS() error {
+	userID := "@" + a.creds.Username + ":" + a.client.HomeserverURL.Host
 
-	if a.authMode == AuthModeAS {
-		a.matrixClient.UserID = id.UserID(userID)
-		a.matrixClient.AccessToken = a.asToken
-		a.matrixClient.DeviceID = "AS_DEVICE"
+	a.client.UserID = id.UserID(userID)
+	a.client.AccessToken = a.creds.ASToken
+	a.client.DeviceID = "AS_DEVICE"
 
-		return nil
-	}
-
-	return a.authorizeViaLogin(ctx)
+	return nil
 }
 
-func (a *authService) authorizeBotViaLogin(ctx context.Context) error {
+func (a *Service) authorizeLogin(ctx context.Context) error {
 	if err := a.authBot(ctx); err != nil {
 		if err := a.registerBot(ctx); err != nil {
 			return err
@@ -60,7 +57,7 @@ func (a *authService) authorizeBotViaLogin(ctx context.Context) error {
 }
 
 // authBot - Authenticates the bot with the homeserver
-func (b *DefaultBot) authBot(ctx context.Context) error {
+func (a *Service) authBot(ctx context.Context) error {
 	// Получаем текущую директорию
 	currentDir, err := os.Getwd()
 	if err != nil {
@@ -68,7 +65,7 @@ func (b *DefaultBot) authBot(ctx context.Context) error {
 	}
 
 	// Check if a file with a saved device ID exists
-	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", b.name))
+	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", a.name))
 	var deviceID id.DeviceID
 
 	if _, err := os.Stat(deviceIDFile); err == nil {
@@ -85,9 +82,9 @@ func (b *DefaultBot) authBot(ctx context.Context) error {
 		Type: mautrix.AuthTypePassword,
 		Identifier: mautrix.UserIdentifier{
 			Type: mautrix.IdentifierTypeUser,
-			User: b.credentials.Username,
+			User: a.creds.Username,
 		},
-		Password: b.credentials.Password,
+		Password: a.creds.Password,
 	}
 
 	// If we have a saved device ID, we use it
@@ -95,14 +92,14 @@ func (b *DefaultBot) authBot(ctx context.Context) error {
 		loginReq.DeviceID = deviceID
 	}
 
-	resp, err := b.matrixClient.Login(ctx, loginReq)
+	resp, err := a.client.Login(ctx, loginReq)
 	if err != nil {
 		return err
 	}
 
-	b.matrixClient.UserID = resp.UserID
-	b.matrixClient.AccessToken = resp.AccessToken
-	b.matrixClient.DeviceID = resp.DeviceID
+	a.client.UserID = resp.UserID
+	a.client.AccessToken = resp.AccessToken
+	a.client.DeviceID = resp.DeviceID
 
 	// Save device ID to file
 	cryptoDir := filepath.Join(currentDir, ".bin", "crypto")
@@ -115,7 +112,7 @@ func (b *DefaultBot) authBot(ctx context.Context) error {
 	}
 
 	// We check that the client is actually authorized
-	whoami, err := b.matrixClient.Whoami(ctx)
+	whoami, err := a.client.Whoami(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to verify login: %w", err)
 	}
@@ -128,10 +125,10 @@ func (b *DefaultBot) authBot(ctx context.Context) error {
 }
 
 // registerBot - Registers the bot with the homeserver
-func (b *DefaultBot) registerBot(ctx context.Context) error {
-	resp, err := b.matrixClient.RegisterDummy(ctx, &mautrix.ReqRegister{
-		Username:     b.credentials.Username,
-		Password:     b.credentials.Password,
+func (a *Service) registerBot(ctx context.Context) error {
+	resp, err := a.client.RegisterDummy(ctx, &mautrix.ReqRegister{
+		Username:     a.creds.Username,
+		Password:     a.creds.Password,
 		InhibitLogin: false,
 		Auth:         nil,
 		Type:         mautrix.AuthTypeDummy,
@@ -140,8 +137,8 @@ func (b *DefaultBot) registerBot(ctx context.Context) error {
 		return err
 	}
 
-	b.matrixClient.UserID = resp.UserID
-	b.matrixClient.AccessToken = resp.AccessToken
+	a.client.UserID = resp.UserID
+	a.client.AccessToken = resp.AccessToken
 
 	return nil
 }

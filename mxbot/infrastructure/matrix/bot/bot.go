@@ -1,12 +1,14 @@
-package bot // ok?
+package bot
 
 import (
 	"context"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
+	"maunium.net/go/mautrix/event"
 )
 
 type DefaultBot struct {
@@ -17,7 +19,7 @@ type DefaultBot struct {
 	machine      *crypto.OlmMachine
 
 	logger      *zerolog.Logger
-	credentials *BotCredentials
+	credentials *config.BotCredentials
 
 	syncerRetry   time.Duration
 	typingTimeout time.Duration
@@ -25,40 +27,30 @@ type DefaultBot struct {
 	cancel context.CancelFunc
 
 	isThreadEnabled bool
+
+	botStatus event.Presence
+
+	authMode config.AuthMode
+	asToken  string
 }
 
-// BotCredentials - credentials of the bot for Matrix
-// should be provided by the user
-// (username, password, homeserverURL)
-type BotCredentials struct {
-	Username      string
-	Password      string
-	HomeServerURL string
-	PickleKey     []byte
-	ThreadLimit   int
-	AuthMode      AuthMode
-	ASToken       string
-}
+// type DefaultBot2 struct {
+// 	eventHandlers []EventHandler
+
+// 	filters []Filter
+// }
 
 var (
 	defaultSyncerRetryTime = 5 * time.Second
 	defaultTypingTimeout   = 30 * time.Second
 )
 
-type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot
+// type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot
 
-// var _ mxbot.Bot = (*DefaultBot)(nil)
-
-// var _ domain.BotInfo = (*DefaultBot)(nil)
-// var _ domain.BotClient = (*DefaultBot)(nil)
-// var _ domain.BotMessaging = (*DefaultBot)(nil)
-// var _ domain.BotThreads = (*DefaultBot)(nil)
-// var _ domain.EventLoader = (*DefaultBot)(nil)
-
-func NewDefault(
-	name string,
-	creds *BotCredentials,
-	opts ...BotOptions,
-) (*DefaultBot, error) {
-	return &DefaultBot{}, nil
-}
+// func NewDefault(
+// 	name string,
+// 	creds *BotCredentials,
+// 	opts ...BotOptions,
+// ) (*DefaultBot, error) {
+// 	return &DefaultBot{}, nil
+// }

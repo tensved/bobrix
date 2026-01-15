@@ -2,46 +2,37 @@ package ctx
 
 import (
 	"context"
-	"sync"
 
 	domainbot "github.com/tensved/bobrix/mxbot/domain/bot"
-	threads "github.com/tensved/bobrix/mxbot/domain/threads"
+	domainctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	"maunium.net/go/mautrix/event"
 )
 
-// type Factory interface {
-// 	New(ctx context.Context, evt *event.Event) (dctx.Ctx, error)
-// }
+type Factory interface {
+	New(ctx context.Context, evt *event.Event) (domainctx.Ctx, error)
+}
 
-func NewDefaultCtx(
-	ctx context.Context,
-	event *event.Event,
+type defaultFactory struct {
+	bot     domainbot.BotMessaging
+	threads domainbot.BotThreads
+	events  domainbot.EventLoader
+}
+
+func NewFactory(
 	bot domainbot.BotMessaging,
-	threadProvider domainbot.BotThreads,
-	eventLoader domainbot.EventLoader,
-) (*DefaultCtx, error) {
-
-	var thread *threads.MessagesThread
-	if threadProvider != nil && threadProvider.IsThreadEnabled() {
-		var err error
-		thread, err = threadProvider.GetThreadByEvent(ctx, event)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	ctx = injectMetadataInContext(ctx, event, eventLoader)
-
-	return &DefaultCtx{
-		context: ctx,
-		event:   event,
+	threads domainbot.BotThreads,
+	events domainbot.EventLoader,
+) Factory {
+	return &defaultFactory{
 		bot:     bot,
-		thread:  thread,
-		storage: map[string]any{},
-		mx:      &sync.Mutex{},
-		handlesStatus: &handlesStatus{
-			isHandled: false,
-			mx:        sync.Mutex{},
-		},
-	}, nil
+		threads: threads,
+		events:  events,
+	}
+}
+
+func (f *defaultFactory) New(
+	ctx context.Context,
+	evt *event.Event,
+) (domainctx.Ctx, error) {
+	return NewDefaultCtx(ctx, evt, f.bot, f.threads, f.events)
 }

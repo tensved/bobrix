@@ -3,7 +3,7 @@ package ctx
 import (
 	"context"
 
-	"github.com/tensved/bobrix/mxbot/domain/bot"
+	// "github.com/tensved/bobrix/mxbot/domain/bot"
 	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix/event"
@@ -20,7 +20,7 @@ type Ctx interface {
 	Thread() *threads.MessagesThread
 	SetThread(thread *threads.MessagesThread)
 
-	Bot() bot.BotMessaging
+	// Bot() bot.BotMessaging
 
 	Answer(msg messages.Message) error
 	TextAnswer(text string) error

@@ -1,20 +1,38 @@
 package constructor
 
 import (
-	"fmt"
+	"context"
+	"time"
 
-	// "github.com/docker/docker/daemon/events"
-	// "github.com/docker/docker/daemon/events"
+	"github.com/rs/zerolog"
 	"github.com/tensved/bobrix/mxbot/domain/bot"
+	"maunium.net/go/mautrix"
 
+	dhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
+
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/auth"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/client"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/crypto"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/events"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/health"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/info"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/messaging"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/rooms"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/sync"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/typing"
+
+	applctx "github.com/tensved/bobrix/mxbot/application/ctx"
+	"github.com/tensved/bobrix/mxbot/application/dispatcher"
 )
+
+type Config struct {
+	Credentials   *config.BotCredentials
+	Logger        *zerolog.Logger
+	TypingTimeout time.Duration
+	SyncTimeout   time.Duration
+}
 
 type MatrixBot struct {
 	bot.BotInfo
@@ -25,44 +43,84 @@ type MatrixBot struct {
 	bot.EventLoader
 	bot.BotRoomActions
 	bot.BotTyping
+	bot.BotSync
+	bot.BotHealth
+
+	dispatcher bot.EventDispatcher
 }
 
 func NewMatrixBot(cfg Config) (*MatrixBot, error) {
-	client, err := client.New(cfg)
+	// --- raw Matrix client (no auth yet)
+	clientProvider, err := client.New(cfg.Credentials.HomeServerURL)
 	if err != nil {
-		return nil, fmt.Errorf("dd")
+		return nil, err
+	}
+	rawClient := clientProvider.RawClient().(*mautrix.Client)
+
+	// --- authorize
+	authSvc := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
+	if err := authSvc.Authorize(context.Background()); err != nil {
+		return nil, err
 	}
 
-	rooms := rooms.New(client)
-	messaging := messaging.New(client)
-	typing := typing.New(client, cfg.typingTimeout, cfg.logger)
-	info := info.New(client, cfg.Name)
+	// --- crypto
+	cryptoSvc, err := crypto.New(rawClient, cfg.Credentials.PickleKey, cfg.Credentials.Username)
+	if err != nil {
+		return nil, err
+	}
 
-	crypto := crypto.New(client, cfg.Crypto)
-	events := events.New(client)
-	threads := threads.New(client, events)
+	// --- rooms / threads / typing / messaging
+	roomsSvc := rooms.New(clientProvider)
+	threadsSvc := threads.New(clientProvider, cfg.Credentials.IsThreadEnabled, cfg.Credentials.ThreadLimit)
+	typingSvc := typing.New(clientProvider, cfg.TypingTimeout, cfg.Logger)
+	messagingSvc := messaging.New(clientProvider, cryptoSvc)
+	infoSvc := info.New(clientProvider, cfg.Credentials.Username)
 
-	return &MatrixBot{
-		BotInfo:        info,
-		BotMessaging:   messaging,
-		BotCrypto:      crypto,
-		BotClient:      client,
-		EventLoader:    events,
-		BotThreads:     threads,
-		BotRoomActions: rooms,
-		BotTyping:      typing,
-	}, nil
+	// --- application ctx factory
+	ctxFactory := applctx.NewFactory(
+		messagingSvc,
+		threadsSvc,
+		nil, // event loader (пока не нужен)
+	)
+
+	// --- dispatcher (application)
+	dispatcherSvc := dispatcher.New(
+		nil, // bot.FullBot будет присвоен ниже
+		ctxFactory,
+		nil, // handlers передаются из application
+		nil, // global filters
+	)
+
+	// --- events (decrypt → dispatch)
+	eventsSvc := events.New(cryptoSvc, dispatcherSvc)
+
+	// --- sync (Matrix → events)
+	syncSvc := sync.New(clientProvider, eventsSvc)
+
+	healthSvc := health.New(clientProvider)
+
+	// --- final bot facade
+	matrixBot := &MatrixBot{
+		BotInfo:        infoSvc,
+		BotMessaging:   messagingSvc,
+		BotThreads:     threadsSvc,
+		BotCrypto:      cryptoSvc,
+		BotClient:      clientProvider,
+		BotRoomActions: roomsSvc,
+		BotTyping:      typingSvc,
+		BotSync:        syncSvc,
+		BotHealth:      healthSvc,
+		dispatcher:     dispatcherSvc,
+	}
+
+	// inject FullBot into dispatcher
+	dispatcherSvc.SetBot(matrixBot)
+
+	return matrixBot, nil
 }
 
-// BotCredentials - credentials of the bot for Matrix
-// should be provided by the user
-// (username, password, homeserverURL)
-type BotCredentials struct {
-	Username      string
-	Password      string
-	HomeServerURL string
-	PickleKey     []byte
-	ThreadLimit   int
-	AuthMode      AuthMode
-	ASToken       string
+func (b *MatrixBot) AddEventHandler(h dhandlers.EventHandler) {
+	b.dispatcher.AddEventHandler(h)
 }
+
+// type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot

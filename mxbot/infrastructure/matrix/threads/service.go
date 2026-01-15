@@ -36,7 +36,7 @@ func (s *Service) IsThreadEnabled() bool {
 
 func (s *Service) GetThreadByEvent(ctx context.Context, evt *event.Event) (*threads.MessagesThread, error) {
 	if evt == nil {
-		return nil, ErrNilEvent
+		return nil, domain.ErrNilEvent
 	}
 
 	rel := evt.Content.AsMessage().RelatesTo

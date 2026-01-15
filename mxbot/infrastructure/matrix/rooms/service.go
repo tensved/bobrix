@@ -32,7 +32,7 @@ func (s *Service) JoinedMembersCount(ctx context.Context, roomID id.RoomID) (int
 func (s *Service) JoinRoom(ctx context.Context, roomID id.RoomID) error {
 	_, err := s.client.JoinRoomByID(ctx, roomID)
 	if err != nil {
-		return fmt.Errorf("%w roomID=%v: %w", ErrJoinToRoom, roomID, err)
+		return fmt.Errorf("%w roomID=%v: %w", domain.ErrJoinToRoom, roomID, err)
 	}
 
 	return nil
