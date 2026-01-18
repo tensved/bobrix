@@ -18,7 +18,7 @@ type DefaultCtx struct {
 	event   *event.Event
 	context context.Context
 
-	bot domainbot.BotMessaging // Bot
+	bot domainbot.BotMessaging
 
 	thread *threads.MessagesThread
 
@@ -35,8 +35,8 @@ func NewDefaultCtx(
 	threadProvider domainbot.BotThreads,
 	eventLoader domainbot.EventLoader,
 ) (*DefaultCtx, error) {
-
 	var thread *threads.MessagesThread
+	
 	if threadProvider != nil && threadProvider.IsThreadEnabled() {
 		var err error
 		thread, err = threadProvider.GetThreadByEvent(ctx, event)

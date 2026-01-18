@@ -8,9 +8,8 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-type Factory interface {
-	New(ctx context.Context, evt *event.Event) (domainctx.Ctx, error)
-}
+// Ensure Factory implements domain CtxFactory
+var _ domainctx.CtxFactory = (*defaultFactory)(nil)
 
 type defaultFactory struct {
 	bot     domainbot.BotMessaging
@@ -22,7 +21,7 @@ func NewFactory(
 	bot domainbot.BotMessaging,
 	threads domainbot.BotThreads,
 	events domainbot.EventLoader,
-) Factory {
+) domainctx.CtxFactory {
 	return &defaultFactory{
 		bot:     bot,
 		threads: threads,

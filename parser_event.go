@@ -205,7 +205,7 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 
 	filters := []mxbot.Filter{
 		mxbot.FilterMessageText(),
-		mxbot.FilterTagMeOrPrivate(opts.Bot),
+		mxbot.FilterTagMeOrPrivate(opts.Bot, opts.Bot),
 	}
 
 	return func(evt *event.Event) *ServiceRequest {

@@ -29,25 +29,6 @@ func New(client *mautrix.Client, creds *config.BotCredentials, name string) *Ser
 }
 
 func (a *Service) Authorize(ctx context.Context) error {
-	switch a.creds.AuthMode {
-	case config.AuthModeAS:
-		return a.authorizeAS()
-	default:
-		return a.authorizeLogin(ctx)
-	}
-}
-
-func (a *Service) authorizeAS() error {
-	userID := "@" + a.creds.Username + ":" + a.client.HomeserverURL.Host
-
-	a.client.UserID = id.UserID(userID)
-	a.client.AccessToken = a.creds.ASToken
-	a.client.DeviceID = "AS_DEVICE"
-
-	return nil
-}
-
-func (a *Service) authorizeLogin(ctx context.Context) error {
 	if err := a.authBot(ctx); err != nil {
 		if err := a.registerBot(ctx); err != nil {
 			return err

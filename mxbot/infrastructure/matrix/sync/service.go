@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"time"
 
 	"github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
@@ -14,6 +15,10 @@ type Service struct {
 	client *mautrix.Client
 	router bot.EventRouter
 
+	auth  bot.Auth
+	sink  bot.EventSink
+	retry time.Duration
+
 	cancel context.CancelFunc
 }
 
@@ -24,18 +29,17 @@ func New(c bot.BotClient, router bot.EventRouter) *Service {
 	}
 }
 
+// ?????????????????
 func (s *Service) StartListening(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 
 	syncer := s.client.Syncer.(*mautrix.DefaultSyncer)
-
 	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
-		s.router.HandleMatrixEvent(ctx, evt)
+		_ = s.sink.HandleMatrixEvent(ctx, evt)
 	})
 
-	go s.client.SyncWithContext(ctx)
-
+	go s.run(ctx)
 	return nil
 }
 
@@ -43,43 +47,28 @@ func (s *Service) StopListening(ctx context.Context) error {
 	if s.cancel != nil {
 		s.cancel()
 	}
+
 	return nil
 }
 
-// type Service struct {
-// 	client *mautrix.Client
-// 	crypto domain.BotCrypto
-// 	router domain.EventRouter
-// 	events domain.EventLoader
-// 	sink   domain.EventSink
-// }
+func (s *Service) run(ctx context.Context) {
+	for {
+		err := s.client.SyncWithContext(ctx)
 
-// func New(
-// 	c domain.BotClient,
-// 	crypto domain.BotCrypto,
-// 	router domain.EventRouter,
-// 	events domain.EventLoader,
-// 	sink domain.EventSink,
-// ) *Service {
-// 	return &Service{
-// 		client: c.RawClient().(*mautrix.Client),
-// 		crypto: crypto,
-// 		router: router,
-// 		events: events,
-// 		sink:   sink,
-// 	}
-// }
+		if ctx.Err() != nil {
+			return
+		}
 
-// func (s *Service) Start(ctx context.Context) {
-// 	syncer := s.client.Syncer.(*mautrix.DefaultSyncer)
+		if httpErr, ok := err.(mautrix.HTTPError); ok &&
+			httpErr.RespError.StatusCode == 401 {
 
-// 	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
-// 		s.sink.HandleMatrixEvent(ctx, evt)
-// 	})
+			if err := s.auth.Reauthorize(ctx); err != nil {
+				time.Sleep(s.retry)
+				continue
+			}
+			continue
+		}
 
-// 	syncer.OnEventType(event.ToDeviceRoomKey, s.crypto.HandleToDevice)
-// 	syncer.OnEventType(event.ToDeviceRoomKeyRequest, s.crypto.HandleToDevice)
-// 	syncer.OnEventType(event.ToDeviceForwardedRoomKey, s.crypto.HandleToDevice)
-
-// 	go s.client.SyncWithContext(ctx)
-// }
+		time.Sleep(s.retry)
+	}
+}

@@ -22,7 +22,6 @@ func AutoJoinRoomHandler(
 	info bot.BotInfo,
 	params ...JoinRoomParams,
 ) dh.EventHandler {
-
 	return dh.NewStateMemberHandler(func(ctx ctx.Ctx) error {
 		evt := ctx.Event()
 

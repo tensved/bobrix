@@ -14,7 +14,6 @@ func injectMetadataInContext(
 	evt *event.Event,
 	loader dbot.EventLoader,
 ) context.Context {
-
 	meta := map[string]any{
 		"event": evt,
 	}

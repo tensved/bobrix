@@ -19,24 +19,9 @@ func New(c domain.BotClient) *Service {
 	}
 }
 
-// ????????????????
 // Ping - Checks if the bot is online
 // It will return error if the bot is offline
 func (s *Service) Ping(ctx context.Context) error {
 	_, err := s.client.GetOwnDisplayName(ctx)
 	return err
-}
-
-func (s *Service) SetOnlineStatus() {
-	// _, err := s.client.GetOwnDisplayName(ctx)
-}
-
-func (s *Service) SetOfflineStatus() {
-	// _, err := s.client.GetOwnDisplayName(ctx)
-
-}
-
-func (s *Service) SetIdleStatus() {
-	// _, err := s.client.GetOwnDisplayName(ctx)
-
 }

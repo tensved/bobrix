@@ -26,6 +26,6 @@ func FilterPrivateRoom(bot dombot.BotRoomActions) domfilters.Filter {
 	return filters.FilterPrivateRoom(bot)
 }
 
-func FilterTagMeOrPrivate(bot dombot.FullBot) domfilters.Filter {
-	return filters.TagMeOrPrivate(bot, bot)
+func FilterTagMeOrPrivate(info dombot.BotInfo, room dombot.BotRoomActions) domfilters.Filter {
+	return filters.FilterTagMeOrPrivate(info, room)
 }

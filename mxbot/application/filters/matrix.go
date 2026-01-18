@@ -42,7 +42,9 @@ func FilterAfterStart(
 	}
 }
 
-func TagMeOrPrivate(
+// FilterTageMeOrPrivate - filter for messages that are tagged or sent in a private room
+// return true if message is tagged or sent in a private room
+func FilterTagMeOrPrivate(
 	info db.BotInfo,
 	room db.BotRoomActions,
 ) df.Filter {
@@ -52,6 +54,7 @@ func TagMeOrPrivate(
 	)
 }
 
+// FilterNotInRoom - filter for messages that bot is not in the room
 func FilterNotInRoom(r db.BotRoomActions) df.Filter {
 	return func(evt *event.Event) bool {
 		_, err := r.JoinedMembersCount(context.Background(), evt.RoomID)
@@ -59,6 +62,8 @@ func FilterNotInRoom(r db.BotRoomActions) df.Filter {
 	}
 }
 
+// FilterPrivateRoom - filter for private rooms (there are only two people in the room: bot + user)
+// return true if room is private
 func FilterPrivateRoom(r db.BotRoomActions) df.Filter {
 	return func(evt *event.Event) bool {
 		count, err := r.JoinedMembersCount(context.Background(), evt.RoomID)
@@ -104,4 +109,18 @@ func FilterTagMe(bot db.BotInfo) df.Filter {
 		}
 		return false
 	}
+}
+
+// FilterMembershipEvent - filter for membership events
+// check if message type is event.Membership
+func FilterMembershipEvent(m event.Membership) df.Filter {
+	return func(evt *event.Event) bool {
+		return evt.Content.AsMember().Membership == m
+	}
+}
+
+// FilterMembershipInvite - filter for invite messages
+// check if message type is event.MembershipInvite
+func FilterMembershipInvite() df.Filter {
+	return FilterMembershipEvent(event.MembershipInvite)
 }

@@ -6,8 +6,10 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/domain/filters"
 	"maunium.net/go/mautrix"
 
+	dctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	dhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
 
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/auth"
@@ -45,11 +47,13 @@ type MatrixBot struct {
 	bot.BotTyping
 	bot.BotSync
 	bot.BotHealth
+	bot.BotPresenceControl
 
+	dctx.CtxFactory
 	dispatcher bot.EventDispatcher
 }
 
-func NewMatrixBot(cfg Config) (*MatrixBot, error) {
+func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error) {
 	// --- raw Matrix client (no auth yet)
 	clientProvider, err := client.New(cfg.Credentials.HomeServerURL)
 	if err != nil {
@@ -89,10 +93,11 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		ctxFactory,
 		nil, // handlers передаются из application
 		nil, // global filters
+		cfg.Logger,
 	)
 
 	// --- events (decrypt → dispatch)
-	eventsSvc := events.New(cryptoSvc, dispatcherSvc)
+	eventsSvc := events.New(cryptoSvc, dispatcherSvc, mxbotFilters)
 
 	// --- sync (Matrix → events)
 	syncSvc := sync.New(clientProvider, eventsSvc)
@@ -110,6 +115,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		BotTyping:      typingSvc,
 		BotSync:        syncSvc,
 		BotHealth:      healthSvc,
+		CtxFactory:     ctxFactory,
 		dispatcher:     dispatcherSvc,
 	}
 
@@ -122,5 +128,3 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 func (b *MatrixBot) AddEventHandler(h dhandlers.EventHandler) {
 	b.dispatcher.AddEventHandler(h)
 }
-
-// type BotOptions func(*DefaultBot) // Bot options. Used to configure the bot

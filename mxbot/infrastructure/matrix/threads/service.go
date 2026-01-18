@@ -54,7 +54,6 @@ func (s *Service) GetThreadByEvent(ctx context.Context, evt *event.Event) (*thre
 // inner helper infrastructure method
 // GetThreadStory - gets the thread story
 func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*threads.MessagesThread, error) {
-
 	msgs, err := s.client.Messages(
 		ctx,
 		roomID,

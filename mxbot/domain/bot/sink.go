@@ -13,3 +13,7 @@ type EventSink interface {
 	HandleMatrixEvent(ctx context.Context, evt *event.Event) error
 	// AddHandler(handler EventHandler)
 }
+
+type Auth interface {
+	Reauthorize(ctx context.Context) error
+}

@@ -12,4 +12,5 @@ type FullBot interface {
 	BotSync
 	EventDispatcher
 	BotHealth
+	BotPresenceControl
 }

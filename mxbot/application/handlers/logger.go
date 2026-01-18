@@ -27,6 +27,7 @@ func (h *LoggerHandler) EventType() event.Type {
 	return event.EventMessage
 }
 
+// Filters returns nil — logger handles all events of its type
 func (h *LoggerHandler) Filters() []filters.Filter {
 	return nil
 }

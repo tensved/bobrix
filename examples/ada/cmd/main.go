@@ -16,13 +16,24 @@ func main() {
 
 	engine := bobrix.NewEngine()
 
+	// cfg := &mxbot.Config{
+	// 	Credentials: &mxbot.BotCredentials{
+	// 		Username:      os.Getenv("MX_BOT_USERNAME"),
+	// 		Password:      os.Getenv("MX_BOT_PASSWORD"),
+	// 		HomeServerURL: "http://localhost:8008",
+	// 		PickleKey:     []byte(os.Getenv("PICKLE_KEY")),
+	// 	},
+	// }
+
 	cfg := &mxbot.Config{
 		Credentials: &mxbot.BotCredentials{
-			Username:      os.Getenv("MX_BOT_USERNAME"),
-			Password:      os.Getenv("MX_BOT_PASSWORD"),
-			HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
+			Username:      "MX_BOT_USERNAME",
+			Password:      "MX_BOT_PASSWORD",
+			HomeServerURL: "http://localhost:8008",
+			PickleKey:     []byte("V+NSQ5oG2GRdDyTXZKA3dGpgoGXJRL+elIiVTo/9dDI="),
 		},
 	}
+
 	adaBot, err := ada.NewAdaBot(cfg)
 	if err != nil {
 		panic(err)

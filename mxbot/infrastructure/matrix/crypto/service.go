@@ -52,10 +52,21 @@ func (s *Service) IsEncrypted(evt *event.Event) bool {
 }
 
 func (s *Service) DecryptEvent(ctx context.Context, evt *event.Event) (*event.Event, error) {
-	if !s.IsEncrypted(evt) {
+	if evt.Type != event.EventEncrypted {
 		return evt, nil
 	}
-	return s.machine.DecryptMegolmEvent(ctx, evt)
+
+	decrypted, err := s.machine.DecryptMegolmEvent(ctx, evt)
+	if err == nil {
+		return decrypted, nil
+	}
+
+	if err.Error() == "no session with given ID found" {
+		_ = s.RequestKey(ctx, evt)
+		return nil, err
+	}
+
+	return nil, err
 }
 
 func (s *Service) IsEncryptedRoom(ctx context.Context, roomID id.RoomID) (bool, error) {

@@ -226,3 +226,47 @@ func NewADAService(adaHost string) *contracts.Service {
 ```
 *For a more detailed description see [Service Example](examples/ada/service.go)*
 
+```
+┌────────────────────────────┐
+│ mautrix.DefaultSyncer      │
+│ OnEvent(ctx, evt)          │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ events.Service             │
+│ HandleMatrixEvent          │
+└────────────┬───────────────┘
+             │
+     ┌───────┴───────────────────────────┐
+     │                                    │
+     ▼                                    ▼
+┌───────────────┐               ┌──────────────────┐
+│ to-device evt │               │ room / message   │
+│ m.room_key    │               │ m.room.message   │
+└───────┬───────┘               └────────┬─────────┘
+        │                                │
+        ▼                                ▼
+┌──────────────────┐           ┌────────────────────┐
+│ crypto.Handle    │           │ crypto.Decrypt     │
+│ ToDeviceEvent    │           │ (Megolm)           │
+└──────────────────┘           └────────┬───────────┘
+                                         │
+                           decrypt error │ success
+                                         │
+                    ┌────────────────────┴────────────┐
+                    ▼                                 ▼
+        auto RequestRoomKey                decrypted event
+                                                  │
+                                                  ▼
+                                    ┌────────────────────────┐
+                                    │ transport filters      │
+                                    └────────┬───────────────┘
+                                             │
+                                             ▼
+                                    ┌────────────────────────┐
+                                    │ dispatcher / handlers  │
+                                    │ ctx.Ctx                │
+                                    └────────────────────────┘
+
+```

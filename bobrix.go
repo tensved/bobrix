@@ -54,10 +54,9 @@ func NewBobrix(mxBot mxbot.Bot, opts ...BobrixOpts) *Bobrix {
 	bx := &Bobrix{
 		name:     mxBot.Name(),
 		bot:      mxBot,
-		services: make([]*BobrixService, 0),
+		services: []*BobrixService{},
+		logger:   slog.Default().With("name", mxBot.Name()),
 	}
-
-	bx.logger = slog.Default().With("name", bx.name)
 
 	for _, opt := range opts {
 		opt(bx)
@@ -81,7 +80,17 @@ func (bx *Bobrix) Stop(ctx context.Context) error {
 // ConnectService - add service to the bot
 // It is used for adding services
 // It adds handler for processing the events of the service
-func (bx *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any)) {
+// func (bx *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any)) {
+// 	bx.services = append(bx.services, &BobrixService{
+// 		Service:  service,
+// 		Handler:  handler,
+// 		IsOnline: true,
+// 	})
+// }
+func (bx *Bobrix) ConnectService(
+	service *contracts.Service,
+	handler ServiceHandler,
+) {
 	bx.services = append(bx.services, &BobrixService{
 		Service:  service,
 		Handler:  handler,
@@ -98,7 +107,6 @@ func (bx *Bobrix) Use(handler mxbot.EventHandler) {
 // GetService - return service by name. If the service is not found, it returns nil
 // It is case-insensitive. All services are stored in lowercase
 func (bx *Bobrix) GetService(name string) (*BobrixService, bool) {
-
 	name = strings.ToLower(name)
 
 	for _, botService := range bx.services {
@@ -136,121 +144,171 @@ type ContractParserOpts struct {
 
 // SetContractParser - set contract parser. It is used for parsing events to service requests
 // You can add hooks for pre-call and after-call with ContractParserOpts
-func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest, opts ...ContractParserOpts) {
-
-	var opt ContractParserOpts
-
-	if len(opts) > 0 {
-		opt = opts[0]
-	}
-
+func (bx *Bobrix) SetContractParser(
+	parser func(evt *event.Event) *ServiceRequest,
+	opts ...ContractParserOpts,
+) {
 	bx.Use(
-		mxbot.NewEventHandler(
-			event.EventMessage,
+		mxbot.NewMessageHandler(
 			func(ctx mxbot.Ctx) error {
 
-				request := parser(ctx.Event())
-
-				// if request is nil, it means that the event does not match the contract
-				// and the event should be ignored
-				// or the service is not found
-				if request == nil || request.ServiceName == "" {
+				req := parser(ctx.Event())
+				if req == nil || req.ServiceName == "" {
 					return nil
 				}
 
-				isHandled, unlocker := ctx.IsHandledWithUnlocker()
-				if isHandled {
+				handled, unlock := ctx.IsHandledWithUnlocker()
+				if handled {
 					return nil
 				}
+				defer unlock()
 
-				defer unlocker()
-
-				botService, ok := bx.GetService(strings.ToLower(request.ServiceName))
+				svc, ok := bx.GetService(req.ServiceName)
 				if !ok {
-					bx.logger.Error("service not found", "service", request.ServiceName, "services", fmt.Sprintf("%+v", bx.services[0].Service.Name))
-					if err := ctx.ErrorAnswer(
-						fmt.Sprintf(
-							"Service \"%s\" not found",
-							request.ServiceName,
-						),
+					return ctx.ErrorAnswer(
+						fmt.Sprintf("Service %q not found", req.ServiceName),
 						contracts.ErrCodeServiceNotFound,
-					); err != nil {
-						return err
-					}
-
-					return nil
+					)
 				}
 
-				service := botService.Service
-				handler := botService.Handler
-
-				// if service is not online, send an error and return
-				// IsOnline is true by default. But it can be changed with Healthcheck with WithAutoSwitch() option
-				if !botService.IsOnline {
-					handler(ctx, &contracts.MethodResponse{
-						Err: fmt.Errorf("Service \"%s\" is offline", request.ServiceName),
+				if !svc.IsOnline {
+					svc.Handler(ctx, &contracts.MethodResponse{
+						Err: errors.New("service offline"),
 					}, nil)
 					return nil
 				}
 
-				opts := contracts.CallOpts{}
-
-				if thread := ctx.Thread(); thread != nil {
-					data := ConvertThreadToMessages(thread, ctx.Bot().FullName())
-					opts.Messages = data
-				}
-
-				if opt.PreCallHook != nil {
-					errMsg, errCode, err := opt.PreCallHook(ctx, request)
-					if err != nil {
-						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil { //!
-							return err
-						}
-						return err
-					}
-				}
-
-				response, err := service.CallMethod(
+				resp, err := svc.Service.CallMethod(
 					ctx.Context(),
-					request.MethodName,
-					request.InputParams,
-					opts,
+					req.MethodName,
+					req.InputParams,
+					contracts.CallOpts{},
 				)
-
 				if err != nil {
-					switch {
-					case errors.Is(err, contracts.ErrMethodNotFound):
-						if err := ctx.ErrorAnswer(fmt.Sprintf("Method \"%s\" not found", request.MethodName), contracts.ErrCodeMethodNotFound); err != nil {
-							return err
-						}
-
-					default:
-						if err := ctx.ErrorAnswer(err.Error(), response.ErrCode); err != nil {
-							return err
-						}
-					}
-
-					return nil
+					return ctx.ErrorAnswer(err.Error(), resp.ErrCode)
 				}
 
-				if opt.AfterCallHook != nil {
-					errMsg, errCode, err := opt.AfterCallHook(ctx, request, response)
-					if err != nil {
-						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
-							return err
-						}
-						return err
-					}
-				}
-
-				handler(ctx, response, nil)
-
+				svc.Handler(ctx, resp, nil)
 				return nil
-
 			},
 		),
 	)
 }
+
+// func (bx *Bobrix) SetContractParser(parser func(evt *event.Event) *ServiceRequest, opts ...ContractParserOpts) {
+// 	var opt ContractParserOpts
+
+// 	if len(opts) > 0 {
+// 		opt = opts[0]
+// 	}
+
+// 	bx.Use(
+// 		mxbot.NewEventHandler(
+// 			event.EventMessage,
+// 			func(ctx mxbot.Ctx) error {
+
+// 				request := parser(ctx.Event())
+
+// 				// if request is nil, it means that the event does not match the contract
+// 				// and the event should be ignored
+// 				// or the service is not found
+// 				if request == nil || request.ServiceName == "" {
+// 					return nil
+// 				}
+
+// 				isHandled, unlocker := ctx.IsHandledWithUnlocker()
+// 				if isHandled {
+// 					return nil
+// 				}
+
+// 				defer unlocker()
+
+// 				botService, ok := bx.GetService(strings.ToLower(request.ServiceName))
+// 				if !ok {
+// 					bx.logger.Error("service not found", "service", request.ServiceName, "services", fmt.Sprintf("%+v", bx.services[0].Service.Name))
+// 					if err := ctx.ErrorAnswer(
+// 						fmt.Sprintf(
+// 							"Service \"%s\" not found",
+// 							request.ServiceName,
+// 						),
+// 						contracts.ErrCodeServiceNotFound,
+// 					); err != nil {
+// 						return err
+// 					}
+
+// 					return nil
+// 				}
+
+// 				service := botService.Service
+// 				handler := botService.Handler
+
+// 				// if service is not online, send an error and return
+// 				// IsOnline is true by default. But it can be changed with Healthcheck with WithAutoSwitch() option
+// 				if !botService.IsOnline {
+// 					handler(ctx, &contracts.MethodResponse{
+// 						Err: fmt.Errorf("Service \"%s\" is offline", request.ServiceName),
+// 					}, nil)
+// 					return nil
+// 				}
+
+// 				opts := contracts.CallOpts{}
+
+// 				if thread := ctx.Thread(); thread != nil {
+// 					data := ConvertThreadToMessages(thread, ctx.Bot().FullName())
+// 					opts.Messages = data
+// 				}
+
+// 				if opt.PreCallHook != nil {
+// 					errMsg, errCode, err := opt.PreCallHook(ctx, request)
+// 					if err != nil {
+// 						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil { //!
+// 							return err
+// 						}
+// 						return err
+// 					}
+// 				}
+
+// 				response, err := service.CallMethod(
+// 					ctx.Context(),
+// 					request.MethodName,
+// 					request.InputParams,
+// 					opts,
+// 				)
+
+// 				if err != nil {
+// 					switch {
+// 					case errors.Is(err, contracts.ErrMethodNotFound):
+// 						if err := ctx.ErrorAnswer(fmt.Sprintf("Method \"%s\" not found", request.MethodName), contracts.ErrCodeMethodNotFound); err != nil {
+// 							return err
+// 						}
+
+// 					default:
+// 						if err := ctx.ErrorAnswer(err.Error(), response.ErrCode); err != nil {
+// 							return err
+// 						}
+// 					}
+
+// 					return nil
+// 				}
+
+// 				if opt.AfterCallHook != nil {
+// 					errMsg, errCode, err := opt.AfterCallHook(ctx, request, response)
+// 					if err != nil {
+// 						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
+// 							return err
+// 						}
+// 						return err
+// 					}
+// 				}
+
+// 				handler(ctx, response, nil)
+
+// 				return nil
+
+// 			},
+// 		),
+// 	)
+// }
 
 func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contracts.Messages {
 	msgs := make([]map[contracts.ChatRole]string, len(thread.Messages))

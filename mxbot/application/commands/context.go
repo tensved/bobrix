@@ -24,11 +24,13 @@ func (c *defaultCommandCtx) Args() []string {
 func NewCommandCtx(c ctx.Ctx) commands.CommandCtx {
 	return &defaultCommandCtx{
 		Ctx:  c,
-		args: parseArgs(c.Event()),
+		args: parseArgsFromEvent(c.Event()),
 	}
 }
 
-func parseArgs(evt *event.Event) []string {
+// parseArgsFromEvent - parse the arguments from the event
+// (ignores the command prefix and command name)
+func parseArgsFromEvent(evt *event.Event) []string {
 	if evt.Type != event.EventMessage {
 		return nil
 	}

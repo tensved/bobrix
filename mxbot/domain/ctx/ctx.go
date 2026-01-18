@@ -9,6 +9,10 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
+// Ctx - context of the bot
+// provides access to the bot and event
+// and allows to set and get storage in the context
+// and to answer to the event
 type Ctx interface {
 	Event() *event.Event
 	Context() context.Context
@@ -20,8 +24,6 @@ type Ctx interface {
 	Thread() *threads.MessagesThread
 	SetThread(thread *threads.MessagesThread)
 
-	// Bot() bot.BotMessaging
-
 	Answer(msg messages.Message) error
 	TextAnswer(text string) error
 	ErrorAnswer(errorText string, errorType int) error
@@ -29,4 +31,6 @@ type Ctx interface {
 	IsHandled() bool
 	SetHandled()
 	IsHandledWithUnlocker() (bool, func())
+
+	// Bot() Bot
 }
