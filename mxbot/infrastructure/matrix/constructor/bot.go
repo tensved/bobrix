@@ -19,6 +19,7 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/events"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/health"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/info"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/media"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/messaging"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/rooms"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/sync"
@@ -37,6 +38,7 @@ type Config struct {
 }
 
 type MatrixBot struct {
+	bot.BotAuth
 	bot.BotInfo
 	bot.BotMessaging
 	bot.BotThreads
@@ -48,6 +50,7 @@ type MatrixBot struct {
 	bot.BotSync
 	bot.BotHealth
 	bot.BotPresenceControl
+	bot.BotMedia
 
 	dctx.CtxFactory
 	dispatcher bot.EventDispatcher
@@ -104,8 +107,11 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 
 	healthSvc := health.New(clientProvider)
 
+	mediaSvc := media.New(clientProvider)
+
 	// --- final bot facade
 	matrixBot := &MatrixBot{
+		BotAuth:        authSvc,
 		BotInfo:        infoSvc,
 		BotMessaging:   messagingSvc,
 		BotThreads:     threadsSvc,
@@ -115,6 +121,7 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 		BotTyping:      typingSvc,
 		BotSync:        syncSvc,
 		BotHealth:      healthSvc,
+		BotMedia:       mediaSvc,
 		CtxFactory:     ctxFactory,
 		dispatcher:     dispatcherSvc,
 	}
@@ -128,3 +135,9 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 func (b *MatrixBot) AddEventHandler(h dhandlers.EventHandler) {
 	b.dispatcher.AddEventHandler(h)
 }
+
+// func (b *MatrixBot) DecryptEvent(
+// 	evt *event.Event,
+// ) (*event.Event, error) {
+// 	return b.BotCrypto.DecryptEvent(context.Background(), evt)
+// }

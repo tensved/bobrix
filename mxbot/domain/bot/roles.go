@@ -1,6 +1,7 @@
 package bot
 
 type FullBot interface {
+	BotAuth
 	BotInfo
 	BotMessaging
 	BotThreads
@@ -13,4 +14,5 @@ type FullBot interface {
 	EventDispatcher
 	BotHealth
 	BotPresenceControl
+	BotMedia
 }

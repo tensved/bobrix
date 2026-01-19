@@ -7,11 +7,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// type BotCrypto interface {
-// 	DecryptEvent(ctx context.Context, evt *event.Event) (*event.Event, error)
-// 	IsEncrypted(evt *event.Event) bool
-// }
-
 type BotCrypto interface {
 	IsEncryptedRoom(ctx context.Context, roomID id.RoomID) (bool, error)
 

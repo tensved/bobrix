@@ -14,6 +14,9 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
+var _ bot.FullBot = (*DefaultBot)(nil)
+
+// Application-level coordinator
 type DefaultBot struct {
 	// --- identity
 	name        string
@@ -28,17 +31,19 @@ type DefaultBot struct {
 	ctxFactory domctx.CtxFactory
 
 	// --- infrastructure facades
-	info      bot.BotInfo
-	messaging bot.BotMessaging
-	threads   bot.BotThreads
-	crypto    bot.BotCrypto
-	rooms     bot.BotRoomActions
-	typing    bot.BotTyping
-	sync      bot.BotSync
-	client    bot.BotClient
-	auth      bot.BotAuth
-	health    bot.BotHealth
-	media     bot.BotMedia
+	info        bot.BotInfo
+	messaging   bot.BotMessaging
+	threads     bot.BotThreads
+	crypto      bot.BotCrypto
+	client      bot.BotClient
+	eventLoader bot.EventLoader
+	rooms       bot.BotRoomActions
+	typing      bot.BotTyping
+	sync        bot.BotSync
+	auth        bot.BotAuth
+	health      bot.BotHealth
+	media       bot.BotMedia
+	persence    bot.BotPresenceControl
 
 	// --- runtime state
 	logger *zerolog.Logger
@@ -79,14 +84,19 @@ func NewDefaultBot(
 		botStatus:       event.PresenceOnline,
 		isThreadEnabled: credentials.IsThreadEnabled,
 
-		info:      facade,
-		messaging: facade,
-		threads:   facade,
-		crypto:    facade,
-		rooms:     facade,
-		typing:    facade,
-		sync:      facade,
-		client:    facade,
+		info:        facade,
+		messaging:   facade,
+		threads:     facade,
+		crypto:      facade,
+		client:      facade,
+		eventLoader: facade,
+		rooms:       facade,
+		typing:      facade,
+		sync:        facade,
+		auth:        facade,
+		health:      facade,
+		media:       facade,
+		persence:    facade,
 
 		dispatcher: facade,
 		ctxFactory: facade,
@@ -120,30 +130,17 @@ func NewDefaultBot(
 	return b
 }
 
-// func (b *DefaultBot) AddEventHandler(h handlers.EventHandler) {
-// 	b.dispatcher.AddEventHandler(h)
-// }
+func (b *DefaultBot) Info() bot.BotInfo                { return b.info }
+func (b *DefaultBot) Messaging() bot.BotMessaging      { return b.messaging }
+func (b *DefaultBot) Threads() bot.BotThreads          { return b.threads }
+func (b *DefaultBot) Crypto() bot.BotCrypto            { return b.crypto }
+func (b *DefaultBot) Client() bot.BotClient            { return b.client }
+func (b *DefaultBot) EventLoader() bot.EventLoader     { return b.eventLoader }
+func (b *DefaultBot) Rooms() bot.BotRoomActions        { return b.rooms }
+func (b *DefaultBot) Typing() bot.BotTyping            { return b.typing }
+func (b *DefaultBot) Sync() bot.BotSync                { return b.sync }
+func (b *DefaultBot) Auth() bot.BotAuth                { return b.auth }
+func (b *DefaultBot) Health() bot.BotHealth            { return b.health }
+func (b *DefaultBot) Media() bot.BotMedia              { return b.media }
+func (b *DefaultBot) Presence() bot.BotPresenceControl { return b.persence }
 
-// func (b *DefaultBot) AddFilter(f filters.Filter) {
-// 	b.dispatcher.AddFilter(f)
-// }
-
-// func (b *DefaultBot) StartListening(ctx context.Context) error {
-// 	return b.sync.StartListening(ctx)
-// }
-
-// func (b *DefaultBot) StopListening(ctx context.Context) error {
-// 	return b.sync.StopListening(ctx)
-// }
-
-// func (b *DefaultBot) Name() string {
-// 	return b.name
-// }
-
-// func (b *DefaultBot) FullName() string {
-// 	return b.name // или @user:hs если хочешь
-// }
-
-// func (b *DefaultBot) Info() bot.BotInfo           { return b.info }
-// func (b *DefaultBot) Messaging() bot.BotMessaging { return b.messaging }
-// func (b *DefaultBot) Threads() bot.BotThreads     { return b.threads }
