@@ -4,6 +4,7 @@ import (
 	"context"
 
 	// "github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/domain/botctx"
 	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix/event"
@@ -32,5 +33,5 @@ type Ctx interface {
 	SetHandled()
 	IsHandledWithUnlocker() (bool, func())
 
-	// Bot() Bot
+	Bot() botctx.Bot
 }

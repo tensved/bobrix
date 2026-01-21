@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/tensved/bobrix"
 	"github.com/tensved/bobrix/examples/ada"
@@ -13,26 +14,29 @@ import (
 )
 
 func main() {
-
 	engine := bobrix.NewEngine()
-
-	// cfg := &mxbot.Config{
-	// 	Credentials: &mxbot.BotCredentials{
-	// 		Username:      os.Getenv("MX_BOT_USERNAME"),
-	// 		Password:      os.Getenv("MX_BOT_PASSWORD"),
-	// 		HomeServerURL: "http://localhost:8008",
-	// 		PickleKey:     []byte(os.Getenv("PICKLE_KEY")),
-	// 	},
-	// }
 
 	cfg := &mxbot.Config{
 		Credentials: &mxbot.BotCredentials{
-			Username:      "MX_BOT_USERNAME",
-			Password:      "MX_BOT_PASSWORD",
+			Username:      os.Getenv("MX_BOT_USERNAME"),
+			Password:      os.Getenv("MX_BOT_PASSWORD"),
 			HomeServerURL: "http://localhost:8008",
-			PickleKey:     []byte("V+NSQ5oG2GRdDyTXZKA3dGpgoGXJRL+elIiVTo/9dDI="),
+			PickleKey:     []byte(os.Getenv("PICKLE_KEY")),
 		},
+		TypingTimeout: 3 * time.Second,
+		SyncTimeout:   5 * time.Second,
 	}
+
+	// cfg := &mxbot.Config{
+	// 	Credentials: &mxbot.BotCredentials{
+	// 		Username:      "MX_BOT_USERNAME",
+	// 		Password:      "MX_BOT_PASSWORD",
+	// 		HomeServerURL: "http://localhost:8008",
+	// 		PickleKey:     []byte("V+NSQ5oG2GRdDyTXZKA3dGpgoGXJRL+elIiVTo/9dDI="),
+	// 	},
+	// TypingTimeout: 3 * time.Second,
+	// SyncTimeout:   5 * time.Second,
+	// }
 
 	adaBot, err := ada.NewAdaBot(cfg)
 	if err != nil {
@@ -57,7 +61,6 @@ func main() {
 		sub := ada.Healthchecker.Subscribe()
 
 		for data := range sub.Sync() {
-
 			slog.Debug("healthcheck", "data", data)
 		}
 

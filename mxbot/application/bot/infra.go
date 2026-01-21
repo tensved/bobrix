@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	// applfilters "github.com/tensved/bobrix/mxbot/application/filters"
+	"github.com/tensved/bobrix/mxbot/domain/filters"
 	"github.com/tensved/bobrix/mxbot/domain/handlers"
 	"github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
@@ -159,4 +161,8 @@ func (b *DefaultBot) HandleToDevice(ctx context.Context, evt *event.Event) {
 
 func (b *DefaultBot) AddEventHandler(h handlers.EventHandler) {
 	b.dispatcher.AddEventHandler(h)
+}
+
+func (b *DefaultBot) AddFilter(f filters.Filter) {
+	b.dispatcher.AddFilter(f)
 }

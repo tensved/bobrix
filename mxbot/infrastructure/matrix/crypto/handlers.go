@@ -21,4 +21,3 @@ func (s *Service) RequestKey(ctx context.Context, evt *event.Event) error {
 		nil,
 	)
 }
-

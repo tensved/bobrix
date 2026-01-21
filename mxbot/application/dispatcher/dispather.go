@@ -16,9 +16,8 @@ type Dispatcher struct {
 	bot      bot.FullBot
 	factory  ctx.CtxFactory
 	handlers []handlers.EventHandler
-	filters  []filters.Filter // busines logic
-	// typingTimeout time.Duration
-	logger *zerolog.Logger
+	filters  []filters.Filter
+	logger   *zerolog.Logger
 }
 
 func New(
@@ -27,7 +26,6 @@ func New(
 	handlers []handlers.EventHandler,
 	globalFilters []filters.Filter,
 	logger *zerolog.Logger,
-	// typingTimeout time.Duration,
 ) *Dispatcher {
 	return &Dispatcher{
 		bot:      bot,

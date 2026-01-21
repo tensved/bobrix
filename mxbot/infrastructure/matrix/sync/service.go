@@ -2,6 +2,8 @@ package sync
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/tensved/bobrix/mxbot/domain/bot"
@@ -13,26 +15,31 @@ var _ bot.BotSync = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
-	router bot.EventRouter
 
-	auth  bot.Auth
 	sink  bot.EventSink
+	auth  bot.BotAuth
 	retry time.Duration
 
 	cancel context.CancelFunc
 }
 
-func New(c bot.BotClient, router bot.EventRouter) *Service {
+func New(c bot.BotClient, sink bot.EventSink) *Service {
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
-		router: router,
+		sink:   sink,
 	}
 }
 
-// ?????????????????
 func (s *Service) StartListening(ctx context.Context) error {
+	slog.Info("SYNC: Start listening")
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
+
+	if s.client.Syncer == nil {
+		panic("SYNCER IS NIL")
+	}
+
+	slog.Info("SYNC: syncer", "type", fmt.Sprintf("%T", s.client.Syncer))
 
 	syncer := s.client.Syncer.(*mautrix.DefaultSyncer)
 	syncer.OnEvent(func(ctx context.Context, evt *event.Event) {
@@ -53,16 +60,19 @@ func (s *Service) StopListening(ctx context.Context) error {
 
 func (s *Service) run(ctx context.Context) {
 	for {
+		slog.Info("SYNC: calling SyncWithContext")
 		err := s.client.SyncWithContext(ctx)
 
 		if ctx.Err() != nil {
+			slog.Info("SYNC: Ctx done")
 			return
 		}
 
 		if httpErr, ok := err.(mautrix.HTTPError); ok &&
 			httpErr.RespError.StatusCode == 401 {
 
-			if err := s.auth.Reauthorize(ctx); err != nil {
+			if err := s.auth.Authorize(ctx); err != nil { //???
+				slog.Error("SYNC: sync error", "err", err)
 				time.Sleep(s.retry)
 				continue
 			}

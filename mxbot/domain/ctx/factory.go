@@ -3,7 +3,6 @@ package ctx
 import (
 	"context"
 
-	// domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	"maunium.net/go/mautrix/event"
 )
 

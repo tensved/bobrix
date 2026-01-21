@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -29,8 +30,12 @@ func New(client *mautrix.Client, creds *config.BotCredentials, name string) *Ser
 }
 
 func (a *Service) Authorize(ctx context.Context) error {
+
+	slog.Info("1")
 	if err := a.authBot(ctx); err != nil {
+		slog.Info("2", "err", err)
 		if err := a.registerBot(ctx); err != nil {
+			slog.Info("3", "err", err)
 			return err
 		}
 	}
@@ -46,7 +51,7 @@ func (a *Service) authBot(ctx context.Context) error {
 	}
 
 	// Check if a file with a saved device ID exists
-	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", a.name))
+	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", a.creds.Username))
 	var deviceID id.DeviceID
 
 	if _, err := os.Stat(deviceIDFile); err == nil {
@@ -72,6 +77,12 @@ func (a *Service) authBot(ctx context.Context) error {
 	if deviceID != "" {
 		loginReq.DeviceID = deviceID
 	}
+
+	slog.Info(
+		"matrix login",
+		"username", a.name,//a.creds.Username,
+		"deviceID", loginReq.DeviceID,
+	)
 
 	resp, err := a.client.Login(ctx, loginReq)
 	if err != nil {
@@ -120,6 +131,7 @@ func (a *Service) registerBot(ctx context.Context) error {
 
 	a.client.UserID = resp.UserID
 	a.client.AccessToken = resp.AccessToken
+	a.client.DeviceID = resp.DeviceID
 
 	return nil
 }

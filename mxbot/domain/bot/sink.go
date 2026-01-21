@@ -11,9 +11,4 @@ import (
 // (Matrix syncer, webhooks, tests, etc) and pass them into the application.
 type EventSink interface {
 	HandleMatrixEvent(ctx context.Context, evt *event.Event) error
-	// AddHandler(handler EventHandler)
-}
-
-type Auth interface {
-	Reauthorize(ctx context.Context) error
 }

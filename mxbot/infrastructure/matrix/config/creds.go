@@ -8,8 +8,6 @@ type BotCredentials struct {
 	Password        string
 	HomeServerURL   string
 	PickleKey       []byte
-	IsThreadEnabled bool //????
+	IsThreadEnabled bool
 	ThreadLimit     int
-	// AuthMode        AuthMode
-	// ASToken         string
 }

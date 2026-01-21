@@ -2,6 +2,8 @@ package constructor
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -16,6 +18,7 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/client"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/crypto"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/ctx"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/events"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/health"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/info"
@@ -26,8 +29,14 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/typing"
 
+	// applbot "github.com/tensved/bobrix/mxbot/application/bot"
 	applctx "github.com/tensved/bobrix/mxbot/application/ctx"
 	"github.com/tensved/bobrix/mxbot/application/dispatcher"
+)
+
+var (
+	defaultSyncerRetryTime = 5 * time.Second
+	defaultTypingTimeout   = 30 * time.Second
 )
 
 type Config struct {
@@ -35,6 +44,7 @@ type Config struct {
 	Logger        *zerolog.Logger
 	TypingTimeout time.Duration
 	SyncTimeout   time.Duration
+	// Opts          applbot.BotOptions
 }
 
 type MatrixBot struct {
@@ -53,7 +63,7 @@ type MatrixBot struct {
 	bot.BotMedia
 
 	dctx.CtxFactory
-	dispatcher bot.EventDispatcher
+	Dispatcher *dispatcher.Dispatcher
 }
 
 func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error) {
@@ -67,6 +77,7 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 	// --- authorize
 	authSvc := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
 	if err := authSvc.Authorize(context.Background()); err != nil {
+		slog.Info("--------------", "auth err", err)
 		return nil, err
 	}
 
@@ -77,9 +88,13 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 	}
 
 	// --- rooms / threads / typing / messaging
+	if cfg.TypingTimeout == 0 {
+		cfg.TypingTimeout = defaultTypingTimeout
+	}
+
+	typingSvc := typing.New(clientProvider, cfg.TypingTimeout, cfg.Logger)
 	roomsSvc := rooms.New(clientProvider)
 	threadsSvc := threads.New(clientProvider, cfg.Credentials.IsThreadEnabled, cfg.Credentials.ThreadLimit)
-	typingSvc := typing.New(clientProvider, cfg.TypingTimeout, cfg.Logger)
 	messagingSvc := messaging.New(clientProvider, cryptoSvc)
 	infoSvc := info.New(clientProvider, cfg.Credentials.Username)
 
@@ -88,16 +103,19 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 		messagingSvc,
 		threadsSvc,
 		nil, // event loader (пока не нужен)
+		ctx.NewBotCtx(clientProvider, infoSvc),
 	)
 
 	// --- dispatcher (application)
 	dispatcherSvc := dispatcher.New(
 		nil, // bot.FullBot будет присвоен ниже
 		ctxFactory,
-		nil, // handlers передаются из application
-		nil, // global filters
+		[]dhandlers.EventHandler{}, // handlers передаются из application
+		nil,                        // global filters
 		cfg.Logger,
 	)
+
+	slog.Info("CTOR dispatcher", "ptr", fmt.Sprintf("%p", dispatcherSvc))
 
 	// --- events (decrypt → dispatch)
 	eventsSvc := events.New(cryptoSvc, dispatcherSvc, mxbotFilters)
@@ -123,7 +141,7 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 		BotHealth:      healthSvc,
 		BotMedia:       mediaSvc,
 		CtxFactory:     ctxFactory,
-		dispatcher:     dispatcherSvc,
+		Dispatcher:     dispatcherSvc,
 	}
 
 	// inject FullBot into dispatcher
@@ -133,11 +151,9 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 }
 
 func (b *MatrixBot) AddEventHandler(h dhandlers.EventHandler) {
-	b.dispatcher.AddEventHandler(h)
+	b.Dispatcher.AddEventHandler(h)
 }
 
-// func (b *MatrixBot) DecryptEvent(
-// 	evt *event.Event,
-// ) (*event.Event, error) {
-// 	return b.BotCrypto.DecryptEvent(context.Background(), evt)
-// }
+func (b *MatrixBot) AddFilter(f filters.Filter) {
+	b.Dispatcher.AddFilter(f)
+}

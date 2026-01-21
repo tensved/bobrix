@@ -41,7 +41,6 @@ var typing = typingData{
 // it will be stopped if the context is cancelled or if an error occurs
 // it returns a function that can be used to stop the typing
 func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
-
 	ticker := time.NewTicker(b.typingTimeout)
 
 	typing.add(roomID)
@@ -79,7 +78,6 @@ func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTypin
 
 		close(cancel)
 	}, nil
-
 }
 
 // StartTyping - Starts typing on the room

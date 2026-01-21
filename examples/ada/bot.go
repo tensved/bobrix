@@ -8,6 +8,9 @@ import (
 	"github.com/tensved/bobrix/mxbot"
 )
 
+// go build
+// install_name_tool -change build/libolm.dylib.3.2.16 /usr/local/lib/libolm.dylib ./cmd
+// ./cmd
 func NewAdaBot(cfg *mxbot.Config) (*bobrix.Bobrix, error) {
 	bot, err := mxbot.NewMatrixBot(*cfg)
 	if err != nil {
@@ -15,7 +18,7 @@ func NewAdaBot(cfg *mxbot.Config) (*bobrix.Bobrix, error) {
 	}
 
 	bot.AddEventHandler(
-		mxbot.TextCommand("!ping", func(ctx mxbot.Ctx) error {
+		mxbot.TextCommand("ping", func(ctx mxbot.Ctx) error {
 			return ctx.TextAnswer("pong")
 		}),
 	)
@@ -63,72 +66,3 @@ func NewAdaBot(cfg *mxbot.Config) (*bobrix.Bobrix, error) {
 
 	return bx, nil
 }
-
-// package ada // old
-
-// import (
-// 	"github.com/tensved/bobrix"
-// 	"github.com/tensved/bobrix/contracts"
-// 	"github.com/tensved/bobrix/mxbot"
-// 	"log/slog"
-// )
-
-// func NewAdaBot(credentials *mxbot.Config) (*bobrix.Bobrix, error) {
-// 	bot, err := mxbot.NewDefaultBot("ada", credentials)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	bot.AddCommand(mxbot.NewCommand(
-// 		"ping",
-// 		func(c mxbot.CommandCtx) error {
-
-// 			return c.TextAnswer("pong")
-// 		}),
-// 	)
-
-// 	bot.AddEventHandler(
-// 		mxbot.AutoJoinRoomHandler(bot),
-// 	)
-
-// 	bot.AddEventHandler(
-// 		mxbot.NewLoggerHandler("ada"),
-// 	)
-
-// 	bobr := bobrix.NewBobrix(bot, bobrix.WithHealthcheck(bobrix.WithAutoSwitch()))
-
-// 	bobr.SetContractParser(bobrix.DefaultContractParser(bobr.Bot()))
-
-// 	bobr.SetContractParser(bobrix.AutoRequestParser(&bobrix.AutoParserOpts{
-// 		Bot:         bot,
-// 		ServiceName: "ada",
-// 		MethodName:  "generate",
-// 		InputName:   "prompt",
-// 	}))
-
-// 	bobr.ConnectService(NewADAService("hilltwinssl.singularitynet.io"), func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any) {
-
-// 		if r.Err != nil {
-// 			slog.Error("failed to process request", "error", r.Err)
-
-// 			if err := ctx.TextAnswer("error: " + r.Err.Error()); err != nil {
-// 				slog.Error("failed to send message", "error", err)
-// 			}
-
-// 			return
-// 		}
-
-// 		answer, ok := r.GetString("text")
-// 		if !ok {
-// 			answer = "I don't know"
-// 		}
-
-// 		slog.Debug("got response", "answer", answer)
-
-// 		if err := ctx.TextAnswer(answer); err != nil {
-// 			slog.Error("failed to send message", "error", err)
-// 		}
-// 	})
-
-//		return bobr, nil
-//	}

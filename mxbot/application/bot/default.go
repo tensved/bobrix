@@ -5,9 +5,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	appldispatcher "github.com/tensved/bobrix/mxbot/application/dispatcher"
 	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
 	"github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/domain/botctx"
 	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	// "github.com/tensved/bobrix/mxbot/domain/filters"
 	domfilters "github.com/tensved/bobrix/mxbot/domain/filters"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/constructor"
@@ -15,6 +18,7 @@ import (
 )
 
 var _ bot.FullBot = (*DefaultBot)(nil)
+var _ botctx.Bot = (*DefaultBot)(nil)
 
 // Application-level coordinator
 type DefaultBot struct {
@@ -27,7 +31,7 @@ type DefaultBot struct {
 	isThreadEnabled bool
 
 	// --- application layer
-	dispatcher bot.EventDispatcher
+	dispatcher *appldispatcher.Dispatcher
 	ctxFactory domctx.CtxFactory
 
 	// --- infrastructure facades
@@ -56,9 +60,6 @@ type DefaultBot struct {
 
 	// --- filters
 	filters []domfilters.Filter
-
-	// authMode config.AuthMode
-	// asToken  string
 }
 
 // NewDefaultBot - Bot constructor
@@ -66,12 +67,9 @@ type DefaultBot struct {
 // botCredentials - matrix credentials of the bot
 func NewDefaultBot(
 	displayName string,
-	facade *constructor.MatrixBot, // infrastructure facade
-	// dispatcher bot.EventDispatcher,
-	// ctxFactory domctx.CtxFactory,
+	facade *constructor.MatrixBot, // infra facade
 	logger *zerolog.Logger,
 	credentials *config.BotCredentials,
-	// botStatus event.Presence,
 	opts ...BotOptions,
 ) *DefaultBot {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -98,8 +96,8 @@ func NewDefaultBot(
 		media:       facade,
 		persence:    facade,
 
-		dispatcher: facade,
-		ctxFactory: facade,
+		dispatcher: facade.Dispatcher,
+		ctxFactory: facade.CtxFactory,
 
 		logger: logger,
 		ctx:    ctx,
@@ -143,4 +141,9 @@ func (b *DefaultBot) Auth() bot.BotAuth                { return b.auth }
 func (b *DefaultBot) Health() bot.BotHealth            { return b.health }
 func (b *DefaultBot) Media() bot.BotMedia              { return b.media }
 func (b *DefaultBot) Presence() bot.BotPresenceControl { return b.persence }
+
+// func (b *DefaultBot) AddFilter(f filters.Filter) {
+// 	b.dispatcher.AddFilter(f)
+// }
+
 

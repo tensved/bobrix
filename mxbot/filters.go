@@ -16,6 +16,10 @@ func FilterMessageAudio() domfilters.Filter {
 	return filters.FilterMessageAudio()
 }
 
+func FilterEventMessage() domfilters.Filter {
+	return filters.FilterEventMessage()
+}
+
 // ---- bot related ----
 
 func FilterTagMe(bot dombot.BotInfo) domfilters.Filter {

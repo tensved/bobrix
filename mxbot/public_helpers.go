@@ -1,18 +1,27 @@
 package mxbot
 
-import "maunium.net/go/mautrix"
+import (
+	"strings"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+)
 
 func TextCommand(
 	command string,
 	handler func(Ctx) error,
 ) EventHandler {
 	return NewMessageHandler(
-		func(ctx Ctx) error {
-			body := ctx.Event().Content.AsMessage().Body
-			if body != command {
-				return nil
+		handler,
+		func(evt *event.Event) bool {
+			msg := evt.Content.AsMessage()
+			if msg == nil {
+				return false
 			}
-			return handler(ctx)
+
+			body := strings.TrimSpace(msg.Body)
+
+			return body == command
 		},
 		FilterMessageText(),
 	)

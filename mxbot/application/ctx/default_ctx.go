@@ -6,19 +6,24 @@ import (
 	"sync"
 
 	domainbot "github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/domain/botctx"
 	domainctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix/event"
+	// "maunium.net/go/mautrix/id"
 )
 
 var _ domainctx.Ctx = (*DefaultCtx)(nil)
+
+// var _ botctx.Bot = (*DefaultCtx)(nil)
 
 type DefaultCtx struct {
 	event   *event.Event
 	context context.Context
 
-	bot domainbot.BotMessaging
+	botMessaging domainbot.BotMessaging
+	botCtx       botctx.Bot
 
 	thread *threads.MessagesThread
 
@@ -31,12 +36,13 @@ type DefaultCtx struct {
 func NewDefaultCtx(
 	ctx context.Context,
 	event *event.Event,
-	bot domainbot.BotMessaging,
+	botMessaging domainbot.BotMessaging,
+	botCtx botctx.Bot,
 	threadProvider domainbot.BotThreads,
 	eventLoader domainbot.EventLoader,
 ) (*DefaultCtx, error) {
 	var thread *threads.MessagesThread
-	
+
 	if threadProvider != nil && threadProvider.IsThreadEnabled() {
 		var err error
 		thread, err = threadProvider.GetThreadByEvent(ctx, event)
@@ -48,12 +54,13 @@ func NewDefaultCtx(
 	ctx = injectMetadataInContext(ctx, event, eventLoader)
 
 	return &DefaultCtx{
-		context: ctx,
-		event:   event,
-		bot:     bot,
-		thread:  thread,
-		storage: map[string]any{},
-		mx:      &sync.Mutex{},
+		context:      ctx,
+		event:        event,
+		botMessaging: botMessaging,
+		botCtx:       botCtx,
+		thread:       thread,
+		storage:      map[string]any{},
+		mx:           &sync.Mutex{},
 		handlesStatus: &handlesStatus{
 			isHandled: false,
 			mx:        sync.Mutex{},
@@ -103,8 +110,12 @@ func (c *DefaultCtx) GetInt(key string) (int, error) {
 }
 
 // Bot - get the bot from the context
-func (c *DefaultCtx) Bot() domainbot.BotMessaging {
-	return c.bot
+func (c *DefaultCtx) BotMessaging() domainbot.BotMessaging {
+	return c.botMessaging
+}
+
+func (c *DefaultCtx) Bot() botctx.Bot {
+	return c.botCtx
 }
 
 // Answer - send a message to the room.
@@ -125,7 +136,7 @@ func (c *DefaultCtx) Answer(msg messages.Message) error {
 
 	msg.AddCustomFields(domainctx.AnswerToCustomField, c.event.ID)
 
-	return c.bot.SendMessage(c.Context(), c.event.RoomID, msg)
+	return c.botMessaging.SendMessage(c.Context(), c.event.RoomID, msg)
 }
 
 // TextAnswer - send a text message to the room

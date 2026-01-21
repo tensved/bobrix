@@ -72,7 +72,7 @@ func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID
 
 	for _, evt := range msgs.Chunk {
 
-		msg, ok := getFixedMessage(evt)
+		msg, ok := GetFixedMessage(evt)
 		if !ok {
 			continue
 		}
@@ -95,7 +95,7 @@ func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID
 					break
 				}
 
-				answerMsg, ok := getFixedMessage(answerEvent)
+				answerMsg, ok := GetFixedMessage(answerEvent)
 				if !ok {
 					continue
 				}
@@ -135,7 +135,9 @@ func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID
 	return thread, nil
 }
 
-func getFixedMessage(evt *event.Event) (*event.MessageEventContent, bool) {
+// GetFixedMessage extracts MessageEventContent from raw Matrix event content.
+// Returns (nil, false) if the event does not contain a valid message payload.
+func GetFixedMessage(evt *event.Event) (*event.MessageEventContent, bool) {
 	veryRaw := evt.Content.VeryRaw
 
 	if veryRaw == nil {

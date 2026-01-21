@@ -70,6 +70,7 @@ func (bx *Bobrix) Name() string {
 }
 
 func (bx *Bobrix) Run(ctx context.Context) error {
+	slog.Info("BOBRIX: Run")
 	return bx.bot.StartListening(ctx)
 }
 
@@ -80,14 +81,6 @@ func (bx *Bobrix) Stop(ctx context.Context) error {
 // ConnectService - add service to the bot
 // It is used for adding services
 // It adds handler for processing the events of the service
-//
-//	func (bx *Bobrix) ConnectService(service *contracts.Service, handler func(ctx mxbot.Ctx, r *contracts.MethodResponse, extra any)) {
-//		bx.services = append(bx.services, &BobrixService{
-//			Service:  service,
-//			Handler:  handler,
-//			IsOnline: true,
-//		})
-//	}
 func (bx *Bobrix) ConnectService(
 	service *contracts.Service,
 	handler ServiceHandler,

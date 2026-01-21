@@ -4,7 +4,6 @@ import (
 	"github.com/tensved/bobrix/mxbot/domain/ctx"
 	"github.com/tensved/bobrix/mxbot/domain/filters"
 
-	// dh "github.com/tensved/bobrix/mxbot/domain/handlers"
 	"maunium.net/go/mautrix/event"
 )
 
