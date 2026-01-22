@@ -28,7 +28,6 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/typing"
 
-	// applbot "github.com/tensved/bobrix/mxbot/application/bot"
 	applctx "github.com/tensved/bobrix/mxbot/application/ctx"
 	appldisp "github.com/tensved/bobrix/mxbot/application/dispatcher"
 	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
@@ -44,7 +43,6 @@ type Config struct {
 	Logger        *zerolog.Logger
 	TypingTimeout time.Duration
 	SyncTimeout   time.Duration
-	// Opts          applbot.BotOptions
 }
 
 type MatrixBot struct {
@@ -125,7 +123,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	)
 
 	// --- events (decrypt → dispatch)
-	eventsSvc := events.New(cryptoSvc, dispatcherSvc, dispatcherSvc.Filters())
+	eventsSvc := events.New(cryptoSvc, dispatcherSvc)
 
 	// --- sync (Matrix → events)
 	syncSvc := sync.New(clientProvider, eventsSvc)

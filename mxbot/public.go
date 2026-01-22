@@ -7,9 +7,6 @@ import (
 	"maunium.net/go/mautrix/event"
 
 	applbot "github.com/tensved/bobrix/mxbot/application/bot"
-	// applhandlers "github.com/tensved/bobrix/mxbot/application/handlers"
-	// applctx "github.com/tensved/bobrix/mxbot/application/ctx"
-
 	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	domfilters "github.com/tensved/bobrix/mxbot/domain/filters"

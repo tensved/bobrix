@@ -1,4 +1,4 @@
-package bot // ok
+package bot
 
 import (
 	"context"

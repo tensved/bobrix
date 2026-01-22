@@ -12,8 +12,8 @@ import (
 )
 
 var _ bot.EventDispatcher = (*Dispatcher)(nil)
-var _ bot.EventRouter = (*Dispatcher)(nil)
 var _ bot.EventSink = (*Dispatcher)(nil)
+// var _ bot.EventRouter = (*Dispatcher)(nil)
 
 func (d *Dispatcher) HandleMatrixEvent(ctx context.Context, evt *event.Event) error {
 	if d.bot == nil {

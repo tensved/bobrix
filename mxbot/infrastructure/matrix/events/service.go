@@ -6,26 +6,22 @@ import (
 	"maunium.net/go/mautrix/event"
 
 	"github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/domain/filters"
 )
 
 var _ bot.EventRouter = (*Service)(nil)
 
 type Service struct {
-	crypto  bot.BotCrypto
-	sink    bot.EventSink
-	filters []filters.Filter
+	crypto bot.BotCrypto
+	sink   bot.EventSink
 }
 
 func New(
 	crypto bot.BotCrypto,
 	sink bot.EventSink,
-	filters []filters.Filter,
 ) *Service {
 	return &Service{
-		crypto:  crypto,
-		sink:    sink,
-		filters: filters,
+		crypto: crypto,
+		sink:   sink,
 	}
 }
 
@@ -34,7 +30,8 @@ func (s *Service) HandleMatrixEvent(ctx context.Context, evt *event.Event) error
 	switch evt.Type {
 	case event.ToDeviceRoomKey,
 		event.ToDeviceRoomKeyRequest,
-		event.ToDeviceForwardedRoomKey:
+		event.ToDeviceForwardedRoomKey,
+		event.EventEncrypted:
 		s.crypto.HandleToDevice(ctx, evt)
 		return nil
 	}
@@ -44,19 +41,11 @@ func (s *Service) HandleMatrixEvent(ctx context.Context, evt *event.Event) error
 		return nil
 	}
 
-	// --- 2. decrypt if needed
+	// --- 2. encrypted → decrypt
 	decrypted, err := s.crypto.DecryptEvent(ctx, evt)
 	if err != nil {
 		return err
 	}
 
-	// --- 3. transport-level filters (mxbot)
-	for _, f := range s.filters {
-		if !f(decrypted) {
-			return nil // silently drop
-		}
-	}
-
-	// --- 4. pass to application
 	return s.sink.HandleMatrixEvent(ctx, decrypted)
 }

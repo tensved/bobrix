@@ -1,4 +1,4 @@
-package bot // ok2
+package bot
 
 import "maunium.net/go/mautrix/id"
 
