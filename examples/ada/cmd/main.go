@@ -2,25 +2,32 @@ package main
 
 import (
 	"context"
-	"github.com/tensved/bobrix"
-	"github.com/tensved/bobrix/examples/ada"
-	"github.com/tensved/bobrix/mxbot"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/tensved/bobrix"
+	"github.com/tensved/bobrix/examples/ada"
+	"github.com/tensved/bobrix/mxbot"
 )
 
 func main() {
-
 	engine := bobrix.NewEngine()
 
-	botCredentials := &mxbot.BotCredentials{
-		Username:      os.Getenv("MX_BOT_USERNAME"),
-		Password:      os.Getenv("MX_BOT_PASSWORD"),
-		HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
+	cfg := &mxbot.Config{
+		Credentials: &mxbot.BotCredentials{
+			Username:      os.Getenv("MX_BOT_USERNAME"),
+			Password:      os.Getenv("MX_BOT_PASSWORD"),
+			HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
+			PickleKey:     []byte(os.Getenv("PICKLE_KEY")),
+		},
+		TypingTimeout: 3 * time.Second,
+		SyncTimeout:   5 * time.Second,
 	}
-	adaBot, err := ada.NewAdaBot(botCredentials)
+
+	adaBot, err := ada.NewAdaBot(cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -43,7 +50,6 @@ func main() {
 		sub := ada.Healthchecker.Subscribe()
 
 		for data := range sub.Sync() {
-
 			slog.Debug("healthcheck", "data", data)
 		}
 

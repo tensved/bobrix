@@ -2,85 +2,44 @@ package mxbot
 
 import (
 	"log/slog"
+
 	"maunium.net/go/mautrix/event"
+
+	applhandlers "github.com/tensved/bobrix/mxbot/application/handlers"
+
+	"github.com/tensved/bobrix/mxbot/domain/ctx"
+	"github.com/tensved/bobrix/mxbot/domain/filters"
+	"github.com/tensved/bobrix/mxbot/domain/handlers"
 )
 
-type JoinRoomParams struct {
-	PreJoinHook   func(ctx Ctx) error
-	AfterJoinHook func(ctx Ctx) error
+func NewEventHandler(
+	eventType event.Type,
+	handler func(Ctx) error,
+	filters ...filters.Filter,
+) EventHandler {
+	return handlers.NewEventHandler(eventType, handler, filters...)
 }
 
-// AutoJoinRoomHandler - join the room on invite automatically
-// You can pass JoinRoomParams to modify the behavior of the handler
-// Use PreJoinHook to modify the behavior before joining the room
-// If PreJoinHook returns an error, the join is aborted
-// Use AfterJoinHook to modify the behavior after joining the room
-func AutoJoinRoomHandler(bot Bot, params ...JoinRoomParams) EventHandler {
-	return NewStateMemberHandler(func(ctx Ctx) error {
-		evt := ctx.Event()
-
-		p := JoinRoomParams{}
-
-		if len(params) > 0 {
-			p = params[0]
-		}
-
-		if p.PreJoinHook != nil {
-			if err := p.PreJoinHook(ctx); err != nil {
-				return err
-			}
-		}
-
-		if err := bot.JoinRoom(ctx.Context(), evt.RoomID); err != nil {
-			return err
-		}
-
-		if p.AfterJoinHook != nil {
-			if err := p.AfterJoinHook(ctx); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}, FilterInviteMe(bot))
+func NewStateMemberHandler(
+	handler func(ctx.Ctx) error,
+	filters ...filters.Filter,
+) EventHandler {
+	return handlers.NewStateMemberHandler(handler, filters...)
 }
 
-var _ EventHandler = (*LoggerHandler)(nil)
-
-type LoggerHandler struct {
-	log *slog.Logger
+func NewMessageHandler(
+	handler func(Ctx) error,
+	filters ...filters.Filter,
+) EventHandler {
+	return handlers.NewMessageHandler(handler, filters...)
 }
 
-func NewLoggerHandler(botName string, log ...*slog.Logger) *LoggerHandler {
-	logger := slog.Default()
-
-	if len(log) > 0 {
-		logger = log[0]
-	}
-
-	logger = logger.With("bot", botName)
-
-	return &LoggerHandler{
-		log: logger,
-	}
+func AutoJoinRoomHandler(bot Bot, params ...applhandlers.JoinRoomParams) EventHandler {
+	return applhandlers.AutoJoinRoomHandler(bot, bot, params...)
 }
 
-func (h *LoggerHandler) Handle(ctx Ctx) error {
-	evt := ctx.Event()
-
-	id := evt.ID
-	sender := evt.Sender
-	eventType := evt.Type
-	content := evt.Content
-
-	h.log.Info("new event", "id", id, "sender", sender, "type", eventType, "content", content.Raw)
-	return nil
+func NewLoggerHandler(name string, log ...*slog.Logger) EventHandler {
+	return applhandlers.NewLoggerHandler(name, log...)
 }
 
-func (h *LoggerHandler) EventType() event.Type {
-	return event.EventMessage
-}
-
-func (h *LoggerHandler) Filters() []Filter {
-	return []Filter{}
-}
+type JoinRoomParams = applhandlers.JoinRoomParams

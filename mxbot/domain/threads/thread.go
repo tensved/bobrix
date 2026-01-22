@@ -1,4 +1,4 @@
-package mxbot
+package threads
 
 import (
 	"maunium.net/go/mautrix/event"
