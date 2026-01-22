@@ -20,7 +20,7 @@ func main() {
 		Credentials: &mxbot.BotCredentials{
 			Username:      os.Getenv("MX_BOT_USERNAME"),
 			Password:      os.Getenv("MX_BOT_PASSWORD"),
-			HomeServerURL: "http://localhost:8008",
+			HomeServerURL: os.Getenv("MX_BOT_HOMESERVER_URL"),
 			PickleKey:     []byte(os.Getenv("PICKLE_KEY")),
 		},
 		TypingTimeout: 3 * time.Second,
