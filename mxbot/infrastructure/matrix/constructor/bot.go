@@ -2,8 +2,6 @@ package constructor
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -109,9 +107,9 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 
 	// --- dispatcher (application)
 	dispatcherSvc := appldisp.New(
-		nil, // bot.FullBot будет присвоен ниже
+		nil, // bot.FullBot get lower
 		ctxFactory,
-		[]dhandlers.EventHandler{}, // handlers передаются из application
+		[]dhandlers.EventHandler{}, // handlers get from application
 		[]dfilters.Filter{
 			applfilters.FilterNotMe(infoSvc),
 			applfilters.FilterAfterStart(
@@ -125,8 +123,6 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		},
 		cfg.Logger,
 	)
-
-	slog.Info("CTOR dispatcher", "ptr", fmt.Sprintf("%p", dispatcherSvc))
 
 	// --- events (decrypt → dispatch)
 	eventsSvc := events.New(cryptoSvc, dispatcherSvc, dispatcherSvc.Filters())

@@ -2,7 +2,6 @@ package filters
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"time"
 
@@ -81,11 +80,6 @@ func FilterPrivateRoom(r db.BotRoomActions) df.Filter {
 // (ignores messages from the bot itself)
 func FilterNotMe(bot db.BotInfo) df.Filter {
 	return func(evt *event.Event) bool {
-		log.Printf(
-			"FilterNotMe: sender=%s bot=%s",
-			evt.Sender,
-			bot.UserID(),
-		)
 		return evt.Sender != bot.UserID()
 	}
 }

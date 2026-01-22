@@ -4,26 +4,27 @@ import (
 	"fmt"
 	"time"
 
-	// applctx "github.com/tensved/bobrix/mxbot/application/ctx"
-	// "github.com/tensved/bobrix/mxbot"
+	"maunium.net/go/mautrix/event"
+
 	applbot "github.com/tensved/bobrix/mxbot/application/bot"
 	// applhandlers "github.com/tensved/bobrix/mxbot/application/handlers"
-	"maunium.net/go/mautrix/event"
+	// applctx "github.com/tensved/bobrix/mxbot/application/ctx"
 
 	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
-	"github.com/tensved/bobrix/mxbot/domain/filters"
-	"github.com/tensved/bobrix/mxbot/domain/handlers"
-	"github.com/tensved/bobrix/mxbot/domain/threads"
+	domfilters "github.com/tensved/bobrix/mxbot/domain/filters"
+	domhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
+	domthreads "github.com/tensved/bobrix/mxbot/domain/threads"
+
 	infracfg "github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	infrabot "github.com/tensved/bobrix/mxbot/infrastructure/matrix/constructor"
 	infrathreads "github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 )
 
 type Bot = dombot.FullBot
-type Filter = filters.Filter
-type EventHandler = handlers.EventHandler
-type MessagesThread = threads.MessagesThread
+type Filter = domfilters.Filter
+type EventHandler = domhandlers.EventHandler
+type MessagesThread = domthreads.MessagesThread
 type BotMedia = dombot.BotMedia
 type BotInfo = dombot.BotInfo
 type BotClient = dombot.BotClient

@@ -2,14 +2,13 @@ package bot
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/event"
 
-	// "github.com/tensved/bobrix/mxbot/application/dispatcher"
 	appldispatcher "github.com/tensved/bobrix/mxbot/application/dispatcher"
-	// applfilters "github.com/tensved/bobrix/mxbot/application/filters"
 
 	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 	dombotctx "github.com/tensved/bobrix/mxbot/domain/botctx"
@@ -115,6 +114,8 @@ func NewDefaultBot(
 	for _, opt := range opts {
 		opt(b)
 	}
+
+	slog.Info("New bot created", "bot", b.name)
 
 	return b
 }

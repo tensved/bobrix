@@ -70,7 +70,6 @@ func (bx *Bobrix) Name() string {
 }
 
 func (bx *Bobrix) Run(ctx context.Context) error {
-	slog.Info("BOBRIX: Run")
 	return bx.bot.StartListening(ctx)
 }
 

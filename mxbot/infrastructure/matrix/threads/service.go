@@ -11,8 +11,8 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	domain "github.com/tensved/bobrix/mxbot/domain/bot"
-	dctx "github.com/tensved/bobrix/mxbot/domain/ctx"
-	threads "github.com/tensved/bobrix/mxbot/domain/threads"
+	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	domthreads "github.com/tensved/bobrix/mxbot/domain/threads"
 )
 
 var _ domain.BotThreads = (*Service)(nil)
@@ -35,7 +35,7 @@ func (s *Service) IsThreadEnabled() bool {
 	return s.isThreadEnabled
 }
 
-func (s *Service) GetThreadByEvent(ctx context.Context, evt *event.Event) (*threads.MessagesThread, error) {
+func (s *Service) GetThreadByEvent(ctx context.Context, evt *event.Event) (*domthreads.MessagesThread, error) {
 	if evt == nil {
 		return nil, domain.ErrNilEvent
 	}
@@ -53,8 +53,8 @@ func (s *Service) GetThreadByEvent(ctx context.Context, evt *event.Event) (*thre
 }
 
 // inner helper infrastructure method
-// GetThreadStory - gets the thread story
-func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*threads.MessagesThread, error) {
+// GetdomThreadStory - gets the thread story
+func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID id.EventID) (*domthreads.MessagesThread, error) {
 	msgs, err := s.client.Messages(
 		ctx,
 		roomID,
@@ -86,7 +86,7 @@ func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID
 
 			rawContent := evt.Content.Raw
 
-			if answerEventID, ok := rawContent[dctx.AnswerToCustomField]; ok {
+			if answerEventID, ok := rawContent[domctx.AnswerToCustomField]; ok {
 
 				evtID := id.EventID(answerEventID.(string))
 
@@ -127,7 +127,7 @@ func (s *Service) GetThread(ctx context.Context, roomID id.RoomID, parentEventID
 
 	slices.Reverse(data)
 
-	thread := &threads.MessagesThread{
+	thread := &domthreads.MessagesThread{
 		Messages: data,
 		ParentID: parentEventID,
 		RoomID:   roomID,

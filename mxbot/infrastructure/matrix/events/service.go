@@ -2,7 +2,6 @@ package events
 
 import (
 	"context"
-	"log/slog"
 
 	"maunium.net/go/mautrix/event"
 
@@ -31,7 +30,6 @@ func New(
 }
 
 func (s *Service) HandleMatrixEvent(ctx context.Context, evt *event.Event) error {
-	slog.Info("EVENTS: HandleMatrixEvent", "type", evt.Type)
 	// --- 1. to-device events (crypto-level)
 	switch evt.Type {
 	case event.ToDeviceRoomKey,
