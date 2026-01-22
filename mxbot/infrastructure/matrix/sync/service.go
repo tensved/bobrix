@@ -6,24 +6,25 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
+
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-var _ bot.BotSync = (*Service)(nil)
+var _ dbot.BotSync = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
 
-	sink  bot.EventSink
-	auth  bot.BotAuth
+	sink  dbot.EventSink
+	auth  dbot.BotAuth
 	retry time.Duration
 
 	cancel context.CancelFunc
 }
 
-func New(c bot.BotClient, sink bot.EventSink) *Service {
+func New(c dbot.BotClient, sink dbot.EventSink) *Service {
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
 		sink:   sink,

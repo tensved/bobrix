@@ -1,26 +1,28 @@
 package commands
 
 import (
-	f "github.com/tensved/bobrix/mxbot/application/filters"
-	dc "github.com/tensved/bobrix/mxbot/domain/commands"
-	"github.com/tensved/bobrix/mxbot/domain/ctx"
-	df "github.com/tensved/bobrix/mxbot/domain/filters"
-	dh "github.com/tensved/bobrix/mxbot/domain/handlers"
 	"maunium.net/go/mautrix/event"
+
+	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
+
+	domcommands "github.com/tensved/bobrix/mxbot/domain/commands"
+	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	domfilters "github.com/tensved/bobrix/mxbot/domain/filters"
+	domhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
 )
 
 func NewCommandEventHandler(
-	cmd *dc.Command,
-	extraFilters ...df.Filter,
-) dh.EventHandler {
-	allFilters := []df.Filter{
-		f.FilterCommand(cmd),
+	cmd *domcommands.Command,
+	extraFilters ...domfilters.Filter,
+) domhandlers.EventHandler {
+	allFilters := []domfilters.Filter{
+		applfilters.FilterCommand(cmd),
 	}
 	allFilters = append(allFilters, extraFilters...)
 
-	return dh.NewEventHandler(
+	return domhandlers.NewEventHandler(
 		event.EventMessage,
-		func(c ctx.Ctx) error {
+		func(c domctx.Ctx) error {
 			return cmd.Handler(c)
 		},
 		allFilters...,

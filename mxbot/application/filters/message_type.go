@@ -3,8 +3,9 @@ package filters
 import (
 	"slices"
 
-	df "github.com/tensved/bobrix/mxbot/domain/filters"
 	"maunium.net/go/mautrix/event"
+
+	df "github.com/tensved/bobrix/mxbot/domain/filters"
 )
 
 // FilterMessageTypes - filter for specific message types

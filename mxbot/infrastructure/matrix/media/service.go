@@ -3,18 +3,19 @@ package media
 import (
 	"context"
 
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
+
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-var _ domain.BotMedia = (*Service)(nil)
+var _ dbot.BotMedia = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
 }
 
-func New(c domain.BotClient) *Service {
+func New(c dbot.BotClient) *Service {
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
 	}

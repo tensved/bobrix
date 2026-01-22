@@ -1,4 +1,4 @@
-package commands // !ok
+package commands
 
 import (
 	"github.com/tensved/bobrix/mxbot/domain/ctx"

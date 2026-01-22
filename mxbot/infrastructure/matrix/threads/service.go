@@ -6,12 +6,13 @@ import (
 	"log/slog"
 	"slices"
 
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
-	dctx "github.com/tensved/bobrix/mxbot/domain/ctx"
-	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	domain "github.com/tensved/bobrix/mxbot/domain/bot"
+	dctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 )
 
 var _ domain.BotThreads = (*Service)(nil)

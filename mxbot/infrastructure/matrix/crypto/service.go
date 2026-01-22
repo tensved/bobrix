@@ -6,12 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
 type Service struct {
@@ -19,7 +20,7 @@ type Service struct {
 	machine *crypto.OlmMachine
 }
 
-var _ domain.BotCrypto = (*Service)(nil)
+var _ dbot.BotCrypto = (*Service)(nil)
 
 func New(client *mautrix.Client, pickleKey []byte, name string) (*Service, error) {
 	dir := filepath.Join(".bin", "crypto")

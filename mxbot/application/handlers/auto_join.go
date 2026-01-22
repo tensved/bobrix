@@ -1,15 +1,16 @@
 package handlers
 
 import (
-	f "github.com/tensved/bobrix/mxbot/application/filters"
-	"github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/domain/ctx"
-	dh "github.com/tensved/bobrix/mxbot/domain/handlers"
+	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
+
+	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
+	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	domhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
 )
 
 type JoinRoomParams struct {
-	PreJoinHook   func(ctx.Ctx) error
-	AfterJoinHook func(ctx.Ctx) error
+	PreJoinHook   func(domctx.Ctx) error
+	AfterJoinHook func(domctx.Ctx) error
 }
 
 // AutoJoinRoomHandler - join the room on invite automatically
@@ -18,11 +19,11 @@ type JoinRoomParams struct {
 // If PreJoinHook returns an error, the join is aborted
 // Use AfterJoinHook to modify the behavior after joining the room
 func AutoJoinRoomHandler(
-	room bot.BotRoomActions,
-	info bot.BotInfo,
+	room dombot.BotRoomActions,
+	info dombot.BotInfo,
 	params ...JoinRoomParams,
-) dh.EventHandler {
-	return dh.NewStateMemberHandler(func(ctx ctx.Ctx) error {
+) domhandlers.EventHandler {
+	return domhandlers.NewStateMemberHandler(func(ctx domctx.Ctx) error {
 		evt := ctx.Event()
 
 		var p JoinRoomParams
@@ -47,5 +48,5 @@ func AutoJoinRoomHandler(
 		}
 
 		return nil
-	}, f.FilterInviteMe(info))
+	}, applfilters.FilterInviteMe(info))
 }

@@ -1,8 +1,9 @@
 package client
 
 import (
-	"github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
+
+	"github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
 var _ bot.BotClient = (*Provider)(nil)

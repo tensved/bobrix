@@ -5,25 +5,23 @@ import (
 	"fmt"
 	"sync"
 
-	domainbot "github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/domain/botctx"
-	domainctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	"maunium.net/go/mautrix/event"
+
+	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
+	dombotctx "github.com/tensved/bobrix/mxbot/domain/botctx"
+	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	threads "github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
-	"maunium.net/go/mautrix/event"
-	// "maunium.net/go/mautrix/id"
 )
 
-var _ domainctx.Ctx = (*DefaultCtx)(nil)
-
-// var _ botctx.Bot = (*DefaultCtx)(nil)
+var _ domctx.Ctx = (*DefaultCtx)(nil)
 
 type DefaultCtx struct {
 	event   *event.Event
 	context context.Context
 
-	botMessaging domainbot.BotMessaging
-	botCtx       botctx.Bot
+	botMessaging dombot.BotMessaging
+	botCtx       dombotctx.Bot
 
 	thread *threads.MessagesThread
 
@@ -36,10 +34,10 @@ type DefaultCtx struct {
 func NewDefaultCtx(
 	ctx context.Context,
 	event *event.Event,
-	botMessaging domainbot.BotMessaging,
-	botCtx botctx.Bot,
-	threadProvider domainbot.BotThreads,
-	eventLoader domainbot.EventLoader,
+	botMessaging dombot.BotMessaging,
+	botCtx dombotctx.Bot,
+	threadProvider dombot.BotThreads,
+	eventLoader dombot.EventLoader,
 ) (*DefaultCtx, error) {
 	var thread *threads.MessagesThread
 
@@ -110,11 +108,11 @@ func (c *DefaultCtx) GetInt(key string) (int, error) {
 }
 
 // Bot - get the bot from the context
-func (c *DefaultCtx) BotMessaging() domainbot.BotMessaging {
+func (c *DefaultCtx) BotMessaging() dombot.BotMessaging {
 	return c.botMessaging
 }
 
-func (c *DefaultCtx) Bot() botctx.Bot {
+func (c *DefaultCtx) Bot() dombotctx.Bot {
 	return c.botCtx
 }
 
@@ -134,7 +132,7 @@ func (c *DefaultCtx) Answer(msg messages.Message) error {
 		})
 	}
 
-	msg.AddCustomFields(domainctx.AnswerToCustomField, c.event.ID)
+	msg.AddCustomFields(domctx.AnswerToCustomField, c.event.ID)
 
 	return c.botMessaging.SendMessage(c.Context(), c.event.RoomID, msg)
 }

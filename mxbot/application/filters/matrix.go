@@ -2,12 +2,14 @@ package filters
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"time"
 
+	"maunium.net/go/mautrix/event"
+
 	db "github.com/tensved/bobrix/mxbot/domain/bot"
 	df "github.com/tensved/bobrix/mxbot/domain/filters"
-	"maunium.net/go/mautrix/event"
 )
 
 type FilterAfterStartOptions struct {
@@ -79,6 +81,11 @@ func FilterPrivateRoom(r db.BotRoomActions) df.Filter {
 // (ignores messages from the bot itself)
 func FilterNotMe(bot db.BotInfo) df.Filter {
 	return func(evt *event.Event) bool {
+		log.Printf(
+			"FilterNotMe: sender=%s bot=%s",
+			evt.Sender,
+			bot.UserID(),
+		)
 		return evt.Sender != bot.UserID()
 	}
 }

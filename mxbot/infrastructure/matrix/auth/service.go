@@ -3,25 +3,25 @@ package auth
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 
-	"github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
+
+	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
+	infracfg "github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 )
 
-var _ bot.BotAuth = (*Service)(nil)
+var _ dombot.BotAuth = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
-	creds  *config.BotCredentials
+	creds  *infracfg.BotCredentials
 	name   string
 }
 
-func New(client *mautrix.Client, creds *config.BotCredentials, name string) *Service {
+func New(client *mautrix.Client, creds *infracfg.BotCredentials, name string) *Service {
 	return &Service{
 		client: client,
 		creds:  creds,
@@ -30,12 +30,8 @@ func New(client *mautrix.Client, creds *config.BotCredentials, name string) *Ser
 }
 
 func (a *Service) Authorize(ctx context.Context) error {
-
-	slog.Info("1")
 	if err := a.authBot(ctx); err != nil {
-		slog.Info("2", "err", err)
 		if err := a.registerBot(ctx); err != nil {
-			slog.Info("3", "err", err)
 			return err
 		}
 	}
@@ -77,12 +73,6 @@ func (a *Service) authBot(ctx context.Context) error {
 	if deviceID != "" {
 		loginReq.DeviceID = deviceID
 	}
-
-	slog.Info(
-		"matrix login",
-		"username", a.name,//a.creds.Username,
-		"deviceID", loginReq.DeviceID,
-	)
 
 	resp, err := a.client.Login(ctx, loginReq)
 	if err != nil {

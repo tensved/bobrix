@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/domain/filters"
+
 	"maunium.net/go/mautrix"
 
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 	dctx "github.com/tensved/bobrix/mxbot/domain/ctx"
+	dfilters "github.com/tensved/bobrix/mxbot/domain/filters"
 	dhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
 
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/auth"
@@ -31,7 +32,8 @@ import (
 
 	// applbot "github.com/tensved/bobrix/mxbot/application/bot"
 	applctx "github.com/tensved/bobrix/mxbot/application/ctx"
-	"github.com/tensved/bobrix/mxbot/application/dispatcher"
+	appldisp "github.com/tensved/bobrix/mxbot/application/dispatcher"
+	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
 )
 
 var (
@@ -48,25 +50,25 @@ type Config struct {
 }
 
 type MatrixBot struct {
-	bot.BotAuth
-	bot.BotInfo
-	bot.BotMessaging
-	bot.BotThreads
-	bot.BotCrypto
-	bot.BotClient
-	bot.EventLoader
-	bot.BotRoomActions
-	bot.BotTyping
-	bot.BotSync
-	bot.BotHealth
-	bot.BotPresenceControl
-	bot.BotMedia
+	dbot.BotAuth
+	dbot.BotInfo
+	dbot.BotMessaging
+	dbot.BotThreads
+	dbot.BotCrypto
+	dbot.BotClient
+	dbot.EventLoader
+	dbot.BotRoomActions
+	dbot.BotTyping
+	dbot.BotSync
+	dbot.BotHealth
+	dbot.BotPresenceControl
+	dbot.BotMedia
 
 	dctx.CtxFactory
-	Dispatcher *dispatcher.Dispatcher
+	Dispatcher *appldisp.Dispatcher
 }
 
-func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error) {
+func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	// --- raw Matrix client (no auth yet)
 	clientProvider, err := client.New(cfg.Credentials.HomeServerURL)
 	if err != nil {
@@ -77,7 +79,6 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 	// --- authorize
 	authSvc := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
 	if err := authSvc.Authorize(context.Background()); err != nil {
-		slog.Info("--------------", "auth err", err)
 		return nil, err
 	}
 
@@ -107,18 +108,28 @@ func NewMatrixBot(cfg Config, mxbotFilters []filters.Filter) (*MatrixBot, error)
 	)
 
 	// --- dispatcher (application)
-	dispatcherSvc := dispatcher.New(
+	dispatcherSvc := appldisp.New(
 		nil, // bot.FullBot будет присвоен ниже
 		ctxFactory,
 		[]dhandlers.EventHandler{}, // handlers передаются из application
-		nil,                        // global filters
+		[]dfilters.Filter{
+			applfilters.FilterNotMe(infoSvc),
+			applfilters.FilterAfterStart(
+				infoSvc,
+				roomsSvc,
+				applfilters.FilterAfterStartOptions{
+					StartTime:      time.Now(),
+					ProcessInvites: true,
+				},
+			),
+		},
 		cfg.Logger,
 	)
 
 	slog.Info("CTOR dispatcher", "ptr", fmt.Sprintf("%p", dispatcherSvc))
 
 	// --- events (decrypt → dispatch)
-	eventsSvc := events.New(cryptoSvc, dispatcherSvc, mxbotFilters)
+	eventsSvc := events.New(cryptoSvc, dispatcherSvc, dispatcherSvc.Filters())
 
 	// --- sync (Matrix → events)
 	syncSvc := sync.New(clientProvider, eventsSvc)
@@ -154,6 +165,6 @@ func (b *MatrixBot) AddEventHandler(h dhandlers.EventHandler) {
 	b.Dispatcher.AddEventHandler(h)
 }
 
-func (b *MatrixBot) AddFilter(f filters.Filter) {
+func (b *MatrixBot) AddFilter(f dfilters.Filter) {
 	b.Dispatcher.AddFilter(f)
 }

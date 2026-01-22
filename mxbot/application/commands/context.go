@@ -3,9 +3,10 @@ package commands
 import (
 	"strings"
 
+	"maunium.net/go/mautrix/event"
+
 	"github.com/tensved/bobrix/mxbot/domain/commands"
 	"github.com/tensved/bobrix/mxbot/domain/ctx"
-	"maunium.net/go/mautrix/event"
 )
 
 // DefaultCommandCtx - CommandCtx implementation

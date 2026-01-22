@@ -21,8 +21,6 @@ import (
 )
 
 type Bot = dombot.FullBot
-
-// type Bot =
 type Filter = filters.Filter
 type EventHandler = handlers.EventHandler
 type MessagesThread = threads.MessagesThread
@@ -31,22 +29,15 @@ type BotInfo = dombot.BotInfo
 type BotClient = dombot.BotClient
 type Config = infrabot.Config
 type BotCredentials = infracfg.BotCredentials
+type Ctx = domctx.Ctx
+type BotOptions = applbot.BotOptions
 
 var MetadataKeyContext = domctx.MetadataKeyContext
 
 const AnswerToCustomField = domctx.AnswerToCustomField
 
-type Ctx = domctx.Ctx
-
-// type Ctx interface {
-// 	domctx.Ctx
-// 	Bot() dombot.FullBot
-// }
-
-type BotOptions = applbot.BotOptions
-
 func NewMatrixBot(cfg Config, opts ...applbot.BotOptions) (*applbot.DefaultBot, error) {
-	facade, err := infrabot.NewMatrixBot(cfg, []filters.Filter{})
+	facade, err := infrabot.NewMatrixBot(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("err create facade: %w", err)
 	}

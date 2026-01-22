@@ -3,14 +3,15 @@ package filters
 import (
 	"strings"
 
-	df "github.com/tensved/bobrix/mxbot/domain/filters"
-	dc "github.com/tensved/bobrix/mxbot/domain/commands"
 	"maunium.net/go/mautrix/event"
+
+	"github.com/tensved/bobrix/mxbot/domain/commands"
+	"github.com/tensved/bobrix/mxbot/domain/filters"
 )
 
 // FilterCommand - filter for command messages
 // (check if message starts with command prefix and name)
-func FilterCommand(cmd *dc.Command) df.Filter {
+func FilterCommand(cmd *commands.Command) filters.Filter {
 	return func(evt *event.Event) bool {
 		if evt.Type != event.EventMessage {
 			return false

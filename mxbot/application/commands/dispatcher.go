@@ -2,36 +2,36 @@ package commands
 
 import (
 	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
-	"github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/domain/commands"
-	"github.com/tensved/bobrix/mxbot/domain/filters"
-	"github.com/tensved/bobrix/mxbot/domain/handlers"
+
+	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
+	domcommands "github.com/tensved/bobrix/mxbot/domain/commands"
+	domfilters "github.com/tensved/bobrix/mxbot/domain/filters"
+	domhandlers "github.com/tensved/bobrix/mxbot/domain/handlers"
 )
 
 type Dispatcher struct {
-	handlers []handlers.EventHandler
+	handlers []domhandlers.EventHandler
 }
 
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
-		handlers: []handlers.EventHandler{},
+		handlers: []domhandlers.EventHandler{},
 	}
 }
 
-// AddCommand
 func Register(
-	dispatcher bot.EventDispatcher,
-	cmd *commands.Command,
-	extraFilters ...filters.Filter,
+	dispatcher dombot.EventDispatcher,
+	cmd *domcommands.Command,
+	extraFilters ...domfilters.Filter,
 ) {
 	dispatcher.AddEventHandler(
-		handlers.NewMessageHandler(
+		domhandlers.NewMessageHandler(
 			cmd.Handler,
 			append(extraFilters, applfilters.FilterCommand(cmd))...,
 		),
 	)
 }
 
-func (d *Dispatcher) Handlers() []handlers.EventHandler {
+func (d *Dispatcher) Handlers() []domhandlers.EventHandler {
 	return d.handlers
 }

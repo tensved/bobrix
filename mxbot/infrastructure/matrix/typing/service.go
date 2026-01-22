@@ -4,11 +4,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
+
+	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-var _ domain.BotTyping = (*Service)(nil)
+var _ dombot.BotTyping = (*Service)(nil)
 
 type Service struct {
 	client        *mautrix.Client
@@ -17,7 +18,7 @@ type Service struct {
 }
 
 func New(
-	c domain.BotClient,
+	c dombot.BotClient,
 	typingTimeout time.Duration,
 	logger *zerolog.Logger,
 ) *Service {

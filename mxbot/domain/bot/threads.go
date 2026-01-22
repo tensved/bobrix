@@ -1,11 +1,12 @@
-package bot // ok
+package bot
 
 import (
 	"context"
 
-	"github.com/tensved/bobrix/mxbot/domain/threads"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"github.com/tensved/bobrix/mxbot/domain/threads"
 )
 
 type BotThreads interface {

@@ -1,11 +1,12 @@
 package bot
 
 import (
-	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix/event"
+
+	"github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-var _ dbot.BotPresenceControl = (*DefaultBot)(nil)
+var _ bot.BotPresenceControl = (*DefaultBot)(nil)
 
 func (b *DefaultBot) SetStatus(status event.Presence) {
 	b.botStatus = status

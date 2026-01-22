@@ -3,13 +3,14 @@ package handlers
 import (
 	"log/slog"
 
+	"maunium.net/go/mautrix/event"
+
 	"github.com/tensved/bobrix/mxbot/domain/ctx"
 	"github.com/tensved/bobrix/mxbot/domain/filters"
-	dh "github.com/tensved/bobrix/mxbot/domain/handlers"
-	"maunium.net/go/mautrix/event"
+	"github.com/tensved/bobrix/mxbot/domain/handlers"
 )
 
-var _ dh.EventHandler = (*LoggerHandler)(nil)
+var _ handlers.EventHandler = (*LoggerHandler)(nil)
 
 type LoggerHandler struct {
 	log *slog.Logger

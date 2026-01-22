@@ -4,21 +4,22 @@ import (
 	"context"
 	"fmt"
 
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/messages"
 )
 
-var _ domain.BotMessaging = (*Service)(nil)
+var _ dbot.BotMessaging = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
-	crypto domain.BotCrypto
+	crypto dbot.BotCrypto
 }
 
-func New(c domain.BotClient, crypto domain.BotCrypto) *Service {
+func New(c dbot.BotClient, crypto dbot.BotCrypto) *Service {
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
 		crypto: crypto,
@@ -27,13 +28,13 @@ func New(c domain.BotClient, crypto domain.BotCrypto) *Service {
 
 func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error {
 	if msg == nil {
-		return domain.ErrNilMessage
+		return dbot.ErrNilMessage
 	}
 
 	if msg.Type().IsMedia() {
 		resp, err := s.client.UploadMedia(ctx, msg.AsReqUpload())
 		if err != nil {
-			return fmt.Errorf("%w: %w", domain.ErrUploadMedia, err)
+			return fmt.Errorf("%w: %w", dbot.ErrUploadMedia, err)
 		}
 		msg.SetContentURI(resp.ContentURI)
 	}
@@ -64,13 +65,13 @@ func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg message
 // ?????????????????
 // func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg messages.Message) error {
 // 	if msg == nil {
-// 		return domain.ErrNilMessage
+// 		return dbot.ErrNilMessage
 // 	}
 
 // 	if msg.Type().IsMedia() {
 // 		uploadResponse, err := s.client.UploadMedia(ctx, msg.AsReqUpload())
 // 		if err != nil {
-// 			return fmt.Errorf("%w: %w", domain.ErrUploadMedia, err)
+// 			return fmt.Errorf("%w: %w", dbot.ErrUploadMedia, err)
 // 		}
 // 		msg.SetContentURI(uploadResponse.ContentURI)
 // 	}
@@ -84,12 +85,12 @@ func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg message
 // 			// Send a not encrypted message
 // 			_, err = s.client.SendMessageEvent(ctx, roomID, event.EventMessage, msg.AsJSON())
 // 			if err != nil {
-// 				return fmt.Errorf("%w: %w", domain.ErrSendMessage, err)
+// 				return fmt.Errorf("%w: %w", dbot.ErrSendMessage, err)
 // 			}
 // 			return nil
 // 		}
 // 		slog.Error("failed to get room encryption state", "error", err)
-// 		return fmt.Errorf("%w: %w", domain.ErrSendMessage, err)
+// 		return fmt.Errorf("%w: %w", dbot.ErrSendMessage, err)
 // 	}
 
 // 	// Let's check if we have a session for this room
@@ -100,7 +101,7 @@ func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg message
 // 		members, err := s.client.Members(ctx, roomID)
 // 		if err != nil {
 // 			slog.Error("failed to get room members", "error", err)
-// 			return fmt.Errorf("%w: %w", domain.ErrSendMessage, err)
+// 			return fmt.Errorf("%w: %w", dbot.ErrSendMessage, err)
 // 		}
 
 // 		// Collecting a list of user IDs
@@ -113,7 +114,7 @@ func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg message
 
 // 		err = s.machine.ShareGroupSession(ctx, roomID, userIDs)
 // 		if err != nil {
-// 			return fmt.Errorf("%w: %w", domain.ErrSendMessage, err)
+// 			return fmt.Errorf("%w: %w", dbot.ErrSendMessage, err)
 // 		}
 // 	}
 
@@ -134,13 +135,13 @@ func (s *Service) SendMessage(ctx context.Context, roomID id.RoomID, msg message
 
 // 	encryptedContent, err := s.machine.EncryptMegolmEvent(ctx, roomID, eventType, msg.AsJSON())
 // 	if err != nil {
-// 		return fmt.Errorf("%w: %w", domain.ErrSendMessage, err)
+// 		return fmt.Errorf("%w: %w", dbot.ErrSendMessage, err)
 // 	}
 
 // 	// If encryption was successful, send the encrypted message
 // 	_, err = s.client.SendMessageEvent(ctx, roomID, event.EventEncrypted, encryptedContent)
 // 	if err != nil {
-// 		return fmt.Errorf("%w: %w", domain.ErrSendMessage, err)
+// 		return fmt.Errorf("%w: %w", dbot.ErrSendMessage, err)
 // 	}
 
 // 	return nil

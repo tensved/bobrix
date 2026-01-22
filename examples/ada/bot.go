@@ -8,9 +8,6 @@ import (
 	"github.com/tensved/bobrix/mxbot"
 )
 
-// go build
-// install_name_tool -change build/libolm.dylib.3.2.16 /usr/local/lib/libolm.dylib ./cmd
-// ./cmd
 func NewAdaBot(cfg *mxbot.Config) (*bobrix.Bobrix, error) {
 	bot, err := mxbot.NewMatrixBot(*cfg)
 	if err != nil {

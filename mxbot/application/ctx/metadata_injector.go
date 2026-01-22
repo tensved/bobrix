@@ -4,15 +4,16 @@ import (
 	"context"
 	"log/slog"
 
-	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
-	dctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 	"maunium.net/go/mautrix/event"
+
+	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
+	domctx "github.com/tensved/bobrix/mxbot/domain/ctx"
 )
 
 func injectMetadataInContext(
 	ctx context.Context,
 	evt *event.Event,
-	loader dbot.EventLoader,
+	loader dombot.EventLoader,
 ) context.Context {
 	meta := map[string]any{
 		"event": evt,
@@ -20,12 +21,12 @@ func injectMetadataInContext(
 
 	if evt == nil {
 		slog.Warn("event is nil, skipping metadata injection")
-		return context.WithValue(ctx, dctx.MetadataKeyContext, meta)
+		return context.WithValue(ctx, domctx.MetadataKeyContext, meta)
 	}
 
 	msg := evt.Content.AsMessage()
 	if msg == nil || msg.RelatesTo == nil {
-		return context.WithValue(ctx, dctx.MetadataKeyContext, meta)
+		return context.WithValue(ctx, domctx.MetadataKeyContext, meta)
 	}
 
 	meta["thread_id"] = msg.RelatesTo.EventID
@@ -36,7 +37,7 @@ func injectMetadataInContext(
 			slog.Error("get main event failed", "err", err)
 		}
 		if main != nil {
-			if v, ok := main.Content.Raw[dctx.AnswerToCustomField]; ok {
+			if v, ok := main.Content.Raw[domctx.AnswerToCustomField]; ok {
 				meta["thread.answer_to"] = v
 			}
 		} else {
@@ -44,5 +45,5 @@ func injectMetadataInContext(
 		}
 	}
 
-	return context.WithValue(ctx, dctx.MetadataKeyContext, meta)
+	return context.WithValue(ctx, domctx.MetadataKeyContext, meta)
 }

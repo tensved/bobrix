@@ -4,9 +4,10 @@ import (
 	"context"
 	"log/slog"
 
+	"maunium.net/go/mautrix/event"
+
 	"github.com/tensved/bobrix/mxbot/domain/bot"
 	"github.com/tensved/bobrix/mxbot/domain/filters"
-	"maunium.net/go/mautrix/event"
 )
 
 var _ bot.EventRouter = (*Service)(nil)

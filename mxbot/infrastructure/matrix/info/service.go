@@ -1,19 +1,20 @@
 package info
 
 import (
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
+
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-var _ domain.BotInfo = (*Service)(nil)
+var _ dbot.BotInfo = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
 	name   string
 }
 
-func New(c domain.BotClient, name string) *Service {
+func New(c dbot.BotClient, name string) *Service {
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
 		name:   name,

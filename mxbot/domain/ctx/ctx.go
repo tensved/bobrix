@@ -3,11 +3,11 @@ package ctx
 import (
 	"context"
 
-	// "github.com/tensved/bobrix/mxbot/domain/bot"
-	"github.com/tensved/bobrix/mxbot/domain/botctx"
-	threads "github.com/tensved/bobrix/mxbot/domain/threads"
-	"github.com/tensved/bobrix/mxbot/messages"
 	"maunium.net/go/mautrix/event"
+
+	"github.com/tensved/bobrix/mxbot/domain/botctx"
+	"github.com/tensved/bobrix/mxbot/domain/threads"
+	"github.com/tensved/bobrix/mxbot/messages"
 )
 
 // Ctx - context of the bot

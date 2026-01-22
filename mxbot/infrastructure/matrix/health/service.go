@@ -3,17 +3,18 @@ package health
 import (
 	"context"
 
-	domain "github.com/tensved/bobrix/mxbot/domain/bot"
 	"maunium.net/go/mautrix"
+
+	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
-var _ domain.BotHealth = (*Service)(nil)
+var _ dbot.BotHealth = (*Service)(nil)
 
 type Service struct {
 	client *mautrix.Client
 }
 
-func New(c domain.BotClient) *Service {
+func New(c dbot.BotClient) *Service {
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
 	}

@@ -33,3 +33,7 @@ func FilterPrivateRoom(bot dombot.BotRoomActions) domfilters.Filter {
 func FilterTagMeOrPrivate(info dombot.BotInfo, room dombot.BotRoomActions) domfilters.Filter {
 	return filters.FilterTagMeOrPrivate(info, room)
 }
+
+func FilterNotMe(bot dombot.BotInfo) domfilters.Filter {
+	return filters.FilterNotMe(bot)
+}

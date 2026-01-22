@@ -27,17 +27,6 @@ func main() {
 		SyncTimeout:   5 * time.Second,
 	}
 
-	// cfg := &mxbot.Config{
-	// 	Credentials: &mxbot.BotCredentials{
-	// 		Username:      "MX_BOT_USERNAME",
-	// 		Password:      "MX_BOT_PASSWORD",
-	// 		HomeServerURL: "http://localhost:8008",
-	// 		PickleKey:     []byte("V+NSQ5oG2GRdDyTXZKA3dGpgoGXJRL+elIiVTo/9dDI="),
-	// 	},
-	// TypingTimeout: 3 * time.Second,
-	// SyncTimeout:   5 * time.Second,
-	// }
-
 	adaBot, err := ada.NewAdaBot(cfg)
 	if err != nil {
 		panic(err)

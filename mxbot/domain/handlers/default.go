@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"maunium.net/go/mautrix/event"
+
 	"github.com/tensved/bobrix/mxbot/domain/ctx"
 	"github.com/tensved/bobrix/mxbot/domain/filters"
-
-	"maunium.net/go/mautrix/event"
 )
 
 var _ EventHandler = (*DefaultEventHandler)(nil)

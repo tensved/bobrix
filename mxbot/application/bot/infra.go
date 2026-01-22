@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	// applfilters "github.com/tensved/bobrix/mxbot/application/filters"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
+
 	"github.com/tensved/bobrix/mxbot/domain/filters"
 	"github.com/tensved/bobrix/mxbot/domain/handlers"
 	"github.com/tensved/bobrix/mxbot/domain/threads"
 	"github.com/tensved/bobrix/mxbot/messages"
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 )
 
 // ----- BotAuth
