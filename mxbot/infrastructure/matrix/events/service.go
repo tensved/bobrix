@@ -15,10 +15,7 @@ type Service struct {
 	sink   bot.EventSink
 }
 
-func New(
-	crypto bot.BotCrypto,
-	sink bot.EventSink,
-) *Service {
+func New(crypto bot.BotCrypto, sink bot.EventSink) *Service {
 	return &Service{
 		crypto: crypto,
 		sink:   sink,

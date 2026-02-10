@@ -76,7 +76,7 @@ func (a *Service) authBot(ctx context.Context) error {
 
 	resp, err := a.client.Login(ctx, loginReq)
 	if err != nil {
-		return err
+		return fmt.Errorf("error login: %w", err)
 	}
 
 	a.client.UserID = resp.UserID

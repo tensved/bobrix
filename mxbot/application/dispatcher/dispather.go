@@ -2,7 +2,7 @@ package dispatcher
 
 import (
 	"github.com/rs/zerolog"
-	
+
 	"github.com/tensved/bobrix/mxbot/domain/bot"
 	"github.com/tensved/bobrix/mxbot/domain/ctx"
 	"github.com/tensved/bobrix/mxbot/domain/filters"
@@ -26,6 +26,11 @@ func New(
 	globalFilters []filters.Filter,
 	logger *zerolog.Logger,
 ) *Dispatcher {
+	if logger == nil {
+		l := zerolog.Nop()
+		logger = &l
+	}
+
 	return &Dispatcher{
 		bot:      bot,
 		factory:  factory,
