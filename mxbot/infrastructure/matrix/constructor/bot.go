@@ -2,12 +2,13 @@ package constructor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
-
 	"maunium.net/go/mautrix"
 
 	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
@@ -32,6 +33,8 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/typing"
 
+	"github.com/tensved/bobrix/mxbot/infrastructure/repository/pg"
+
 	applctx "github.com/tensved/bobrix/mxbot/application/ctx"
 	appldisp "github.com/tensved/bobrix/mxbot/application/dispatcher"
 	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
@@ -50,6 +53,8 @@ type Config struct {
 	TypingTimeout time.Duration
 	SyncTimeout   time.Duration
 	PatchStart    time.Time
+
+	MatrixDB *pgxpool.Pool
 }
 
 type MatrixBot struct {
@@ -75,6 +80,10 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	if cfg.Logger == nil {
 		l := zerolog.New(os.Stdout).With().Timestamp().Logger()
 		cfg.Logger = &l
+	}
+
+	if cfg.MatrixDB == nil {
+		return nil, fmt.Errorf("constructor: cfg.MatrixDB is required for PostgresDeduper")
 	}
 
 	store, err := infrastore.NewFileSyncStore(
@@ -152,15 +161,20 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	sink = events.New(cryptoSvc, dispatcherSvc)
 
 	// --- sync (Matrix → events)
-	// deduper := dedup.NewMemoryDeduper()
-	deduper := dedup.NewLeaseDeduper(30 * time.Minute)
+	// deduper := dedup.NewLeaseDeduper(30 * time.Minute)
+	provider := pg.StaticProvider{DB: cfg.MatrixDB}
+	deduper := dedup.NewPostgresDeduper(provider, dedup.PostgresDeduperOptions{
+		ProcessedCacheTTL: 10 * time.Minute,
+		ProcessedCacheMax: 200_000,
+	})
+
 	syncSvc := sync.New(
 		clientProvider,
 		sink,
 		sync.WithAuth(authSvc),
 		sync.WithPatchStart(cfg.PatchStart),
 		sync.WithJoinStore(joinStore),
-		// sync.WithBackfill(true),
+		sync.WithBackfill(true),
 		sync.WithBackfillLimitPerRequest(200),
 		sync.WithDeduper(deduper),
 	)

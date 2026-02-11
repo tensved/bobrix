@@ -28,7 +28,7 @@ type Service struct {
 	prevBatch  *store.PrevBatchStore
 	patchStart time.Time
 
-	// enableBackfill      bool
+	enableBackfill      bool
 	backfillLimitPerReq int
 	backfillDone        chan struct{}
 	backfillCloseOnce   sync.Once
@@ -47,17 +47,17 @@ func New(c dbot.BotClient, sink dbot.EventSink, opts ...Option) *Service {
 	s := &Service{
 		client: c.RawClient().(*mautrix.Client),
 		sink:   sink,
-		retry:  5 * time.Second,
+		retry:  5 * time.Second, // TODO make as param
 
-		// enableBackfill:      true, //!!!!!
-		backfillLimitPerReq: 200, // TODO make as param
+		enableBackfill:      true, // TODO make as param
+		backfillLimitPerReq: 200,  // TODO make as param
 		backfillDone:        make(chan struct{}),
 
 		prevBatch: store.NewPrevBatchStore(),
 
-		workCh:      make(chan *event.Event, 10000),
-		numWorkers:  8,
-		inflightTTL: 5 * time.Minute,
+		workCh:      make(chan *event.Event, 10000), // TODO make as param
+		numWorkers:  8,                              // TODO make as param
+		inflightTTL: 5 * time.Minute,                // TODO make as param
 	}
 
 	for _, o := range opts {
@@ -155,7 +155,7 @@ func (s *Service) startListening(ctx context.Context) error {
 	})
 
 	for i := 0; i < s.numWorkers; i++ {
-		go s.worker(ctx, i)
+		go s.worker(ctx)
 	}
 
 	ds.OnEvent(func(ctxEvt context.Context, evt *event.Event) {
@@ -180,16 +180,6 @@ func (s *Service) startListening(ctx context.Context) error {
 				return // already processed or already inflight
 			}
 		}
-		// if s.deduper != nil && evt.ID != "" {
-		// 	processed, err := s.deduper.IsProcessed(ctx, evt.ID.String())
-		// 	if err != nil {
-		// 		slog.Error("dedup: IsProcessed failed", "err", err)
-		// 		return
-		// 	}
-		// 	if processed {
-		// 		return
-		// 	}
-		// }
 
 		// enqueue (dont block sync)
 		select {
@@ -244,7 +234,7 @@ func (s *Service) run(ctx context.Context) {
 	}
 }
 
-func (s *Service) worker(ctx context.Context, n int) {
+func (s *Service) worker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():

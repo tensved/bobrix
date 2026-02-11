@@ -78,11 +78,11 @@ func (d *LeaseDeduper) TryStartProcessing(_ context.Context, eventID string, ttl
 	}
 
 	if curExp, ok := d.inflight[eventID]; ok {
-		// если lease ещё жив — не даём второй раз
+		// if the lease is still valid, we don't grant it a second time
 		if curExp.After(now) {
 			return false, nil
 		}
-		// lease истёк — можно перезахватить
+		// lease expired - can be reacquired
 	}
 
 	d.inflight[eventID] = exp
@@ -122,47 +122,3 @@ func (d *LeaseDeduper) IsProcessed(_ context.Context, eventID string) (bool, err
 	_, ok := d.processed[eventID]
 	return ok, nil
 }
-
-// package dedup
-
-// import (
-// 	"context"
-// 	"sync"
-
-// 	"github.com/tensved/bobrix/mxbot/domain/bot"
-// )
-
-// var _ bot.EventDeduper = (*MemoryDeduper)(nil)
-
-// type MemoryDeduper struct {
-// 	mu sync.Mutex
-// 	m  map[string]struct{}
-// }
-
-// func NewMemoryDeduper() *MemoryDeduper {
-// 	return &MemoryDeduper{m: map[string]struct{}{}}
-// }
-
-// func (d *MemoryDeduper) TryMarkProcessed(_ context.Context, eventID string) bool {
-// 	d.mu.Lock()
-// 	defer d.mu.Unlock()
-// 	if _, ok := d.m[eventID]; ok {
-// 		return false
-// 	}
-// 	d.m[eventID] = struct{}{}
-// 	return true
-// }
-
-// func (d *MemoryDeduper) MarkProcessed(_ context.Context, eventID string) error {
-// 	d.mu.Lock()
-// 	defer d.mu.Unlock()
-// 	d.m[eventID] = struct{}{}
-// 	return nil
-// }
-
-// func (d *MemoryDeduper) IsProcessed(_ context.Context, eventID string) (bool, error) {
-// 	d.mu.Lock()
-// 	defer d.mu.Unlock()
-// 	_, ok := d.m[eventID]
-// 	return ok, nil
-// }

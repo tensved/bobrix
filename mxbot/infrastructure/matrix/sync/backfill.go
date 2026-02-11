@@ -13,7 +13,7 @@ import (
 func (s *Service) backfillRoom(ctx context.Context, roomID id.RoomID) error {
 	// Backfill only makes sense if it is enabled and there is a deduper
 	// (otherwise, "exactly once" cannot be ensured)
-	if s.deduper == nil { //!s.enableBackfill ||
+	if !s.enableBackfill || s.deduper == nil {
 		return nil
 	}
 

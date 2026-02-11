@@ -27,11 +27,11 @@ func WithPatchStart(t time.Time) Option {
 	}
 }
 
-// func WithBackfill(enabled bool) Option {
-// 	return func(s *Service) {
-// 		s.enableBackfill = enabled
-// 	}
-// }
+func WithBackfill(enabled bool) Option {
+	return func(s *Service) {
+		s.enableBackfill = enabled
+	}
+}
 
 func WithBackfillLimitPerRequest(n int) Option {
 	return func(s *Service) {
