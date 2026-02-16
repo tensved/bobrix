@@ -153,14 +153,6 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		[]dhandlers.EventHandler{}, // handlers get from application
 		[]dfilters.Filter{
 			applfilters.FilterNotMe(infoSvc),
-			// applfilters.FilterAfterStart(
-			// 	infoSvc,
-			// 	roomsSvc,
-			// 	applfilters.FilterAfterStartOptions{
-			// 		StartTime:      time.Now(),
-			// 		ProcessInvites: true,
-			// 	},
-			// ),
 		},
 		cfg.Logger,
 	)
@@ -211,7 +203,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		BotSync:        syncSvc,
 		BotHealth:      healthSvc,
 		BotMedia:       mediaSvc,
-		
+
 		CtxFactory: ctxFactory,
 		Dispatcher: dispatcherSvc,
 	}
