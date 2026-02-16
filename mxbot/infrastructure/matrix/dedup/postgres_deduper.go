@@ -166,11 +166,11 @@ func (d *PostgresDeduper) MarkProcessed(ctx context.Context, eventID string) err
 		INSERT INTO matrix_event_dedup(user_id, event_id, status, lease_until, processed_at, updated_at)
 		VALUES ($1, $2, $3, NULL, now(), now())
 		ON CONFLICT (user_id, event_id) DO UPDATE
-		SET status = $2,
+		SET status = EXCLUDED.status,
 			lease_until = NULL,
 			processed_at = COALESCE(matrix_event_dedup.processed_at, now()),
 			updated_at = now()
-		WHERE matrix_event_dedup.status <> $2
+		WHERE matrix_event_dedup.status <> EXCLUDED.status
 		`
 	_, err := exec.Exec(ctx, q, d.userID, eventID, statusProcessed)
 	if err == nil && d.cache != nil {
