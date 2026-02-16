@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	bot "github.com/tensved/bobrix/mxbot/domain/bot"
+	"github.com/tensved/bobrix/mxbot/domain/bot"
 )
 
 var _ bot.EventDeduper = (*LeaseDeduper)(nil)

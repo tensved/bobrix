@@ -54,6 +54,14 @@ type Config struct {
 	SyncTimeout   time.Duration
 	PatchStart    time.Time
 
+	DeduperProcessedCacheTTL time.Duration
+	DeduperProcessedCacheMax int
+	BackfillLimitPerRequest  int
+
+	AuthRetry   time.Duration
+	InflightTTL time.Duration
+	NumWorkers  int
+
 	MatrixDB *pgxpool.Pool
 }
 
@@ -71,6 +79,7 @@ type MatrixBot struct {
 	dbot.BotHealth
 	dbot.BotPresenceControl
 	dbot.BotMedia
+	// dbot.EventDeduper
 
 	dctx.CtxFactory
 	Dispatcher *appldisp.Dispatcher
@@ -134,7 +143,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	ctxFactory := applctx.NewFactory(
 		messagingSvc,
 		threadsSvc,
-		nil, // event loader (пока не нужен)
+		nil,
 		ctx.NewBotCtx(clientProvider, infoSvc),
 	)
 
@@ -161,21 +170,28 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	sink = events.New(cryptoSvc, dispatcherSvc)
 
 	// --- sync (Matrix → events)
+
+	// other version of deduper
 	// deduper := dedup.NewLeaseDeduper(30 * time.Minute)
+
 	provider := pg.StaticProvider{DB: cfg.MatrixDB}
 	deduper := dedup.NewPostgresDeduper(provider, dedup.PostgresDeduperOptions{
-		ProcessedCacheTTL: 10 * time.Minute,
-		ProcessedCacheMax: 200_000,
+		ProcessedCacheTTL: cfg.DeduperProcessedCacheTTL,
+		UserID:            cfg.Credentials.Username,
+		ProcessedCacheMax: cfg.DeduperProcessedCacheMax,
 	})
 
 	syncSvc := sync.New(
 		clientProvider,
 		sink,
+		cfg.AuthRetry,
+		cfg.InflightTTL,
+		cfg.NumWorkers,
 		sync.WithAuth(authSvc),
 		sync.WithPatchStart(cfg.PatchStart),
 		sync.WithJoinStore(joinStore),
 		sync.WithBackfill(true),
-		sync.WithBackfillLimitPerRequest(200),
+		sync.WithBackfillLimitPerRequest(cfg.BackfillLimitPerRequest),
 		sync.WithDeduper(deduper),
 	)
 
@@ -196,8 +212,9 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		BotSync:        syncSvc,
 		BotHealth:      healthSvc,
 		BotMedia:       mediaSvc,
-		CtxFactory:     ctxFactory,
-		Dispatcher:     dispatcherSvc,
+		// EventDeduper:   deduper,
+		CtxFactory: ctxFactory,
+		Dispatcher: dispatcherSvc,
 	}
 
 	// inject FullBot into dispatcher

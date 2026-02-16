@@ -13,6 +13,7 @@ import (
 type JoinStore struct {
 	path string
 	mu   sync.Mutex
+
 	// room_id -> join_ts_millis
 	JoinTS map[id.RoomID]int64 `json:"join_ts"`
 }

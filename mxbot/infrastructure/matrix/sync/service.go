@@ -43,21 +43,19 @@ type Service struct {
 	cancel context.CancelFunc
 }
 
-func New(c dbot.BotClient, sink dbot.EventSink, opts ...Option) *Service {
+func New(c dbot.BotClient, sink dbot.EventSink, retry, inflightTTL time.Duration, numWorkers int, opts ...Option) *Service {
 	s := &Service{
 		client: c.RawClient().(*mautrix.Client),
 		sink:   sink,
-		retry:  5 * time.Second, // TODO make as param
+		retry:  retry,
 
-		enableBackfill:      true, // TODO make as param
-		backfillLimitPerReq: 200,  // TODO make as param
-		backfillDone:        make(chan struct{}),
+		backfillDone: make(chan struct{}),
 
 		prevBatch: store.NewPrevBatchStore(),
 
-		workCh:      make(chan *event.Event, 10000), // TODO make as param
-		numWorkers:  8,                              // TODO make as param
-		inflightTTL: 5 * time.Minute,                // TODO make as param
+		workCh:      make(chan *event.Event, 10000),
+		numWorkers:  numWorkers,
+		inflightTTL: inflightTTL,
 	}
 
 	for _, o := range opts {

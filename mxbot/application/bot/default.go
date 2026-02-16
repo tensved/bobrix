@@ -50,6 +50,7 @@ type DefaultBot struct {
 	health      dombot.BotHealth
 	media       dombot.BotMedia
 	persence    dombot.BotPresenceControl
+	// dedup       dombot.EventDeduper
 
 	// --- runtime state
 	logger *zerolog.Logger
@@ -97,6 +98,7 @@ func NewDefaultBot(
 		health:      facade,
 		media:       facade,
 		persence:    facade,
+		// dedup:       facade,
 
 		dispatcher: facade.Dispatcher,
 		ctxFactory: facade.CtxFactory,

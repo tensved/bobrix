@@ -166,3 +166,21 @@ func (b *DefaultBot) AddEventHandler(h handlers.EventHandler) {
 func (b *DefaultBot) AddFilter(f filters.Filter) {
 	b.dispatcher.AddFilter(f)
 }
+
+// --- EventDeduper
+
+// func (b *DefaultBot) IsProcessed(ctx context.Context, eventID string) (bool, error) {
+// 	return b.dedup.IsProcessed(ctx, eventID)
+// }
+
+// func (b *DefaultBot) TryStartProcessing(ctx context.Context, eventID string, ttl time.Duration) (ok bool, err error) {
+// 	return b.dedup.TryStartProcessing(ctx, eventID, ttl)
+// }
+
+// func (b *DefaultBot) MarkProcessed(ctx context.Context, eventID string) error {
+// 	return b.dedup.MarkProcessed(ctx, eventID)
+// }
+
+// func (b *DefaultBot) UnmarkInflight(ctx context.Context, eventID string) error {
+// 	return b.dedup.UnmarkInflight(ctx, eventID)
+// }

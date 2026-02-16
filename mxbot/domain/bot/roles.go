@@ -15,4 +15,5 @@ type FullBot interface {
 	BotHealth
 	BotPresenceControl
 	BotMedia
+	// EventDeduper
 }
