@@ -79,7 +79,6 @@ type MatrixBot struct {
 	dbot.BotHealth
 	dbot.BotPresenceControl
 	dbot.BotMedia
-	// dbot.EventDeduper
 
 	dctx.CtxFactory
 	Dispatcher *appldisp.Dispatcher
@@ -212,7 +211,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		BotSync:        syncSvc,
 		BotHealth:      healthSvc,
 		BotMedia:       mediaSvc,
-		// EventDeduper:   deduper,
+		
 		CtxFactory: ctxFactory,
 		Dispatcher: dispatcherSvc,
 	}
