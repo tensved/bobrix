@@ -37,18 +37,22 @@ type Service struct {
 	startOnce sync.Once
 	runOnce   sync.Once
 
-	workCh     chan *event.Event
-	numWorkers int
+	workCh      chan *event.Event
+	numWorkers  int
+	inflightTTL time.Duration
 
 	cancel context.CancelFunc
 }
 
-func New(c dbot.BotClient, sink dbot.EventSink, authRetry time.Duration, numWorkers int, opts ...Option) (*Service, error) { //inflightTTL time.Duration,
+func New(c dbot.BotClient, sink dbot.EventSink, authRetry, inflightTTL time.Duration, numWorkers, workChCap int, opts ...Option) (*Service, error) {
 	if numWorkers < 1 {
 		return nil, errors.New("numWorkers should be >= 1")
 	}
 	if authRetry <= 0 {
 		authRetry = 5 * time.Second
+	}
+	if inflightTTL <= 0 {
+		inflightTTL = 5 * time.Minute
 	}
 
 	s := &Service{
@@ -60,8 +64,9 @@ func New(c dbot.BotClient, sink dbot.EventSink, authRetry time.Duration, numWork
 
 		prevBatch: store.NewPrevBatchStore(),
 
-		workCh:     make(chan *event.Event, 10000),
-		numWorkers: numWorkers,
+		workCh:      make(chan *event.Event, workChCap),
+		numWorkers:  numWorkers,
+		inflightTTL: inflightTTL,
 	}
 
 	for _, o := range opts {
@@ -110,20 +115,18 @@ func (s *Service) startListening(ctx context.Context) error {
 	var backfillOnce sync.Once
 	ds.OnSync(func(ctxSync context.Context, resp *mautrix.RespSync, since string) bool {
 		totalTimeline := 0
+		totalState := 0
 		for _, roomData := range resp.Rooms.Join {
 			totalTimeline += len(roomData.Timeline.Events)
+			totalState += len(roomData.State.Events)
 		}
-		slog.Info("sync: batch",
+
+		slog.Debug("sync: batch",
 			"since", since,
 			"next_batch", resp.NextBatch,
 			"timeline_events", totalTimeline,
+			"state_events", totalState,
 		)
-
-		// totalState := 0
-		for _, roomData := range resp.Rooms.Join {
-			totalTimeline += len(roomData.Timeline.Events)
-			// totalState += len(roomData.State.Events)
-		}
 
 		// 1) Save prev_batch tokens per room for /messages backfill
 		for roomID, roomData := range resp.Rooms.Join {
@@ -137,14 +140,27 @@ func (s *Service) startListening(ctx context.Context) error {
 		// and doesn't give us origin_server_ts.
 		if s.joinStore != nil {
 			for roomID, roomData := range resp.Rooms.Join {
-				events := append(roomData.State.Events, roomData.Timeline.Events...)
-				for _, evt := range events {
-					if evt.Type == event.StateMember && evt.GetStateKey() == s.client.UserID.String() {
-						if membership, _ := evt.Content.Raw["membership"].(string); membership == "join" {
-							_ = s.joinStore.SetIfLater(roomID, evt.Timestamp)
+				// events := append(roomData.State.Events, roomData.Timeline.Events...)
+				// for _, evt := range events {
+				// 	if evt.Type == event.StateMember && evt.GetStateKey() == s.client.UserID.String() {
+				// 		if membership, _ := evt.Content.Raw["membership"].(string); membership == "join" {
+				// 			_ = s.joinStore.SetIfLater(roomID, evt.Timestamp)
+				// 		}
+				// 	}
+				// }
+
+				scan := func(evts []*event.Event) {
+					for _, evt := range evts {
+						if evt.Type == event.StateMember && evt.GetStateKey() == s.client.UserID.String() {
+							if membership, _ := evt.Content.Raw["membership"].(string); membership == "join" {
+								_ = s.joinStore.SetIfLater(roomID, evt.Timestamp)
+							}
 						}
 					}
 				}
+
+				scan(roomData.State.Events)
+				scan(roomData.Timeline.Events)
 			}
 		}
 
@@ -175,7 +191,7 @@ func (s *Service) startListening(ctx context.Context) error {
 
 		// dedup
 		if s.deduper != nil && evt.ID != "" {
-			ok, err := s.deduper.TryStartProcessing(ctx, evt.ID.String()) //, s.inflightTTL
+			ok, err := s.deduper.TryStartProcessing(ctx, evt.ID.String(), s.inflightTTL)
 			if err != nil {
 				slog.Error("dedup: TryStartProcessing failed", "err", err, "id", evt.ID)
 				return
@@ -188,7 +204,7 @@ func (s *Service) startListening(ctx context.Context) error {
 		// enqueue (dont block sync)
 		select {
 		case s.workCh <- evt:
-			slog.Info("sync: got msg", "room", evt.RoomID, "id", evt.ID, "ts", evt.Timestamp)
+			slog.Debug("sync: got msg", "room", evt.RoomID, "id", evt.ID, "ts", evt.Timestamp)
 		default:
 			// queue is full: better remove inflight so we can try again
 			slog.Error("sync: queue full, dropping", "room", evt.RoomID, "id", evt.ID)
@@ -259,7 +275,9 @@ func (s *Service) worker(ctx context.Context) {
 				}
 			}
 
-			slog.Info("sync: handled ok", "room", evt.RoomID, "id", evt.ID, "ts", evt.Timestamp)
+			if evt.Type == event.EventMessage {
+				slog.Info("sync: handled ok", "room", evt.RoomID, "id", evt.ID)
+			}
 		}
 	}
 }

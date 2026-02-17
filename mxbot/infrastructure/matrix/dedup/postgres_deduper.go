@@ -2,6 +2,7 @@ package dedup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -30,13 +31,11 @@ type processedCache struct {
 
 func newProcessedCache(ttl time.Duration, max int) *processedCache {
 	if ttl <= 0 {
-		ttl = 5 * time.Minute
+		ttl = 10 * time.Minute
 	}
-
 	if max <= 0 {
 		max = 200_000
 	}
-
 	return &processedCache{
 		ttl: ttl,
 		max: max,
@@ -97,11 +96,8 @@ type PostgresDeduperOptions struct {
 }
 
 func NewPostgresDeduper(provider pg.ExecutorProvider, opts PostgresDeduperOptions) (*PostgresDeduper, error) {
-	if provider == nil {
-		return nil, fmt.Errorf("PostgresDeduper: provider is nil")
-	}
 	if opts.UserID == "" {
-		return nil, fmt.Errorf("PostgresDeduper: UserID is required")
+		return nil, errors.New("PostgresDeduper: UserID is required")
 	}
 
 	return &PostgresDeduper{
@@ -111,9 +107,12 @@ func NewPostgresDeduper(provider pg.ExecutorProvider, opts PostgresDeduperOption
 	}, nil
 }
 
-func (d *PostgresDeduper) TryStartProcessing(ctx context.Context, eventID string) (bool, error) {
+func (d *PostgresDeduper) TryStartProcessing(ctx context.Context, eventID string, ttl time.Duration) (bool, error) {
 	if eventID == "" {
 		return true, nil
+	}
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
 	}
 
 	// fast failure: recently processed
@@ -136,7 +135,7 @@ func (d *PostgresDeduper) TryStartProcessing(ctx context.Context, eventID string
 		RETURNING event_id
 		`
 
-	sec := d.cache.ttl.Seconds()
+	sec := int64(ttl.Seconds())
 	if sec <= 0 {
 		sec = 1
 	}

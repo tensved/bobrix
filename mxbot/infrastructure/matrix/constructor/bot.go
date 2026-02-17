@@ -40,8 +40,6 @@ import (
 	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
 )
 
-var sink dbot.EventSink
-
 var (
 	defaultSyncerRetryTime = 5 * time.Second
 	defaultTypingTimeout   = 30 * time.Second
@@ -56,11 +54,14 @@ type Config struct {
 
 	DeduperProcessedCacheTTL time.Duration
 	DeduperProcessedCacheMax int
-	BackfillLimitPerRequest  int
+
+	BackfillLimitPerRequest int
+	WithBackfill            bool
 
 	AuthRetry   time.Duration
 	InflightTTL time.Duration
 	NumWorkers  int
+	WorkChCap   int
 
 	MatrixDB *pgxpool.Pool
 }
@@ -165,7 +166,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	)
 
 	// --- events (decrypt → dispatch)
-	sink = events.New(cryptoSvc, dispatcherSvc)
+	sink := events.New(cryptoSvc, dispatcherSvc)
 
 	// --- sync (Matrix → events)
 
@@ -186,12 +187,13 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		clientProvider,
 		sink,
 		cfg.AuthRetry,
+		cfg.InflightTTL,
 		cfg.NumWorkers,
+		cfg.WorkChCap,
 		sync.WithAuth(authSvc),
 		sync.WithPatchStart(cfg.PatchStart),
 		sync.WithJoinStore(joinStore),
-		sync.WithBackfill(true),
-		sync.WithBackfillLimitPerRequest(cfg.BackfillLimitPerRequest),
+		sync.WithBackfill(cfg.WithBackfill, cfg.BackfillLimitPerRequest),
 		sync.WithDeduper(deduper),
 	)
 	if err != nil {

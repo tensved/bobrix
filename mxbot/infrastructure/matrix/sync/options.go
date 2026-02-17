@@ -27,16 +27,12 @@ func WithPatchStart(t time.Time) Option {
 	}
 }
 
-func WithBackfill(enabled bool) Option {
+func WithBackfill(enabled bool, backfillLimitPerReq int) Option {
 	return func(s *Service) {
 		s.enableBackfill = enabled
-	}
-}
-
-func WithBackfillLimitPerRequest(n int) Option {
-	return func(s *Service) {
-		if n > 0 {
-			s.backfillLimitPerReq = n
+		s.backfillLimitPerReq = backfillLimitPerReq
+		if s.backfillLimitPerReq <= 0 {
+			s.backfillLimitPerReq = 200
 		}
 	}
 }
