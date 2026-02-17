@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,12 +22,15 @@ type Service struct {
 	name   string
 }
 
-func New(client *mautrix.Client, creds *infracfg.BotCredentials, name string) *Service {
+func New(client *mautrix.Client, creds *infracfg.BotCredentials, name string) (*Service, error) {
+	if name == "" {
+		return nil, errors.New("bot name shouldnt be an empty string")
+	}
 	return &Service{
 		client: client,
 		creds:  creds,
 		name:   name,
-	}
+	}, nil
 }
 
 func (a *Service) Authorize(ctx context.Context) error {
@@ -76,7 +80,7 @@ func (a *Service) authBot(ctx context.Context) error {
 
 	resp, err := a.client.Login(ctx, loginReq)
 	if err != nil {
-		return err
+		return fmt.Errorf("error login: %w", err)
 	}
 
 	a.client.UserID = resp.UserID

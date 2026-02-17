@@ -13,7 +13,6 @@ import (
 
 var _ bot.EventDispatcher = (*Dispatcher)(nil)
 var _ bot.EventSink = (*Dispatcher)(nil)
-// var _ bot.EventRouter = (*Dispatcher)(nil)
 
 func (d *Dispatcher) HandleMatrixEvent(ctx context.Context, evt *event.Event) error {
 	if d.bot == nil {
@@ -60,8 +59,6 @@ func (d *Dispatcher) HandleMatrixEvent(ctx context.Context, evt *event.Event) er
 func (d *Dispatcher) SetBot(b bot.FullBot) {
 	d.bot = b
 }
-
-var _ bot.EventDispatcher = (*Dispatcher)(nil)
 
 func (d *Dispatcher) AddEventHandler(h handlers.EventHandler) {
 	d.handlers = append(d.handlers, h)

@@ -24,6 +24,9 @@ type Service struct {
 }
 
 func New(c domain.BotClient, isThreadEnabled bool, threadLimit int) *Service {
+	if threadLimit == 0 {
+		threadLimit = 120
+	}
 	return &Service{
 		client:          c.RawClient().(*mautrix.Client),
 		isThreadEnabled: isThreadEnabled,

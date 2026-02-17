@@ -2,10 +2,13 @@ package constructor
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
-
 	"maunium.net/go/mautrix"
 
 	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
@@ -18,15 +21,19 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/crypto"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/ctx"
+	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/dedup"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/events"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/health"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/info"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/media"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/messaging"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/rooms"
+	infrastore "github.com/tensved/bobrix/mxbot/infrastructure/matrix/store"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/sync"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/typing"
+
+	"github.com/tensved/bobrix/mxbot/infrastructure/repository/pg"
 
 	applctx "github.com/tensved/bobrix/mxbot/application/ctx"
 	appldisp "github.com/tensved/bobrix/mxbot/application/dispatcher"
@@ -43,6 +50,20 @@ type Config struct {
 	Logger        *zerolog.Logger
 	TypingTimeout time.Duration
 	SyncTimeout   time.Duration
+	PatchStart    time.Time
+
+	DeduperProcessedCacheTTL time.Duration
+	DeduperProcessedCacheMax int
+
+	BackfillLimitPerRequest int
+	WithBackfill            bool
+
+	AuthRetry   time.Duration
+	InflightTTL time.Duration
+	NumWorkers  int
+	WorkChCap   int
+
+	MatrixDB *pgxpool.Pool
 }
 
 type MatrixBot struct {
@@ -65,15 +86,42 @@ type MatrixBot struct {
 }
 
 func NewMatrixBot(cfg Config) (*MatrixBot, error) {
+	if cfg.Logger == nil {
+		l := zerolog.New(os.Stdout).With().Timestamp().Logger()
+		cfg.Logger = &l
+	}
+
+	if cfg.MatrixDB == nil {
+		return nil, fmt.Errorf("constructor: cfg.MatrixDB is required for PostgresDeduper")
+	}
+
+	store, err := infrastore.NewFileSyncStore(
+		filepath.Join(".bin", "syncstore", cfg.Credentials.Username, "sync.json"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	joinStore, err := infrastore.NewJoinStore(
+		filepath.Join(".bin", "syncstore", cfg.Credentials.Username, "join.json"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	// --- raw Matrix client (no auth yet)
-	clientProvider, err := client.New(cfg.Credentials.HomeServerURL)
+	clientProvider, err := client.New(cfg.Credentials.HomeServerURL, store)
 	if err != nil {
 		return nil, err
 	}
 	rawClient := clientProvider.RawClient().(*mautrix.Client)
 
 	// --- authorize
-	authSvc := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
+	authSvc, err := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := authSvc.Authorize(context.Background()); err != nil {
 		return nil, err
 	}
@@ -93,13 +141,16 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	roomsSvc := rooms.New(clientProvider)
 	threadsSvc := threads.New(clientProvider, cfg.Credentials.IsThreadEnabled, cfg.Credentials.ThreadLimit)
 	messagingSvc := messaging.New(clientProvider, cryptoSvc)
-	infoSvc := info.New(clientProvider, cfg.Credentials.Username)
+	infoSvc, err := info.New(clientProvider, cfg.Credentials.Username)
+	if err != nil {
+		return nil, err
+	}
 
 	// --- application ctx factory
 	ctxFactory := applctx.NewFactory(
 		messagingSvc,
 		threadsSvc,
-		nil, // event loader (пока не нужен)
+		nil,
 		ctx.NewBotCtx(clientProvider, infoSvc),
 	)
 
@@ -110,23 +161,44 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		[]dhandlers.EventHandler{}, // handlers get from application
 		[]dfilters.Filter{
 			applfilters.FilterNotMe(infoSvc),
-			applfilters.FilterAfterStart(
-				infoSvc,
-				roomsSvc,
-				applfilters.FilterAfterStartOptions{
-					StartTime:      time.Now(),
-					ProcessInvites: true,
-				},
-			),
 		},
 		cfg.Logger,
 	)
 
 	// --- events (decrypt → dispatch)
-	eventsSvc := events.New(cryptoSvc, dispatcherSvc)
+	sink := events.New(cryptoSvc, dispatcherSvc)
 
 	// --- sync (Matrix → events)
-	syncSvc := sync.New(clientProvider, eventsSvc)
+
+	// other version of deduper
+	// deduper := dedup.NewLeaseDeduper(30 * time.Minute)
+
+	provider := pg.StaticProvider{DB: cfg.MatrixDB}
+	deduper, err := dedup.NewPostgresDeduper(provider, dedup.PostgresDeduperOptions{
+		ProcessedCacheTTL: cfg.DeduperProcessedCacheTTL,
+		UserID:            cfg.Credentials.Username,
+		ProcessedCacheMax: cfg.DeduperProcessedCacheMax,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	syncSvc, err := sync.New(
+		clientProvider,
+		sink,
+		cfg.AuthRetry,
+		cfg.InflightTTL,
+		cfg.NumWorkers,
+		cfg.WorkChCap,
+		sync.WithAuth(authSvc),
+		sync.WithPatchStart(cfg.PatchStart),
+		sync.WithJoinStore(joinStore),
+		sync.WithBackfill(cfg.WithBackfill, cfg.BackfillLimitPerRequest),
+		sync.WithDeduper(deduper),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	healthSvc := health.New(clientProvider)
 
@@ -145,8 +217,9 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		BotSync:        syncSvc,
 		BotHealth:      healthSvc,
 		BotMedia:       mediaSvc,
-		CtxFactory:     ctxFactory,
-		Dispatcher:     dispatcherSvc,
+
+		CtxFactory: ctxFactory,
+		Dispatcher: dispatcherSvc,
 	}
 
 	// inject FullBot into dispatcher

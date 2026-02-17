@@ -12,15 +12,19 @@ type Provider struct {
 	client *mautrix.Client
 }
 
-func New(HomeserverURL string) (*Provider, error) {
-	cli, err := mautrix.NewClient(HomeserverURL, "", "")
+func New(hsURL string, store mautrix.SyncStore) (*Provider, error) {
+	cli, err := mautrix.NewClient(hsURL, "", "")
 	if err != nil {
 		return nil, err
+	}
+
+	cli.Store = store
+
+	if cli.Syncer == nil {
+		cli.Syncer = mautrix.NewDefaultSyncer()
 	}
 
 	return &Provider{client: cli}, nil
 }
 
-func (p *Provider) RawClient() any {
-	return p.client
-}
+func (p *Provider) RawClient() any { return p.client }
