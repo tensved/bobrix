@@ -19,7 +19,6 @@ type JoinStore struct {
 }
 
 func NewJoinStore(path string) (*JoinStore, error) {
-
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err

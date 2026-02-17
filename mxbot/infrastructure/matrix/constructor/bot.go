@@ -116,7 +116,11 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	rawClient := clientProvider.RawClient().(*mautrix.Client)
 
 	// --- authorize
-	authSvc := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
+	authSvc, err := auth.New(rawClient, cfg.Credentials, cfg.Credentials.Username)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := authSvc.Authorize(context.Background()); err != nil {
 		return nil, err
 	}
@@ -136,7 +140,10 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	roomsSvc := rooms.New(clientProvider)
 	threadsSvc := threads.New(clientProvider, cfg.Credentials.IsThreadEnabled, cfg.Credentials.ThreadLimit)
 	messagingSvc := messaging.New(clientProvider, cryptoSvc)
-	infoSvc := info.New(clientProvider, cfg.Credentials.Username)
+	infoSvc, err := info.New(clientProvider, cfg.Credentials.Username)
+	if err != nil {
+		return nil, err
+	}
 
 	// --- application ctx factory
 	ctxFactory := applctx.NewFactory(
@@ -166,17 +173,19 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	// deduper := dedup.NewLeaseDeduper(30 * time.Minute)
 
 	provider := pg.StaticProvider{DB: cfg.MatrixDB}
-	deduper := dedup.NewPostgresDeduper(provider, dedup.PostgresDeduperOptions{
+	deduper, err := dedup.NewPostgresDeduper(provider, dedup.PostgresDeduperOptions{
 		ProcessedCacheTTL: cfg.DeduperProcessedCacheTTL,
 		UserID:            cfg.Credentials.Username,
 		ProcessedCacheMax: cfg.DeduperProcessedCacheMax,
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	syncSvc := sync.New(
+	syncSvc, err := sync.New(
 		clientProvider,
 		sink,
 		cfg.AuthRetry,
-		cfg.InflightTTL,
 		cfg.NumWorkers,
 		sync.WithAuth(authSvc),
 		sync.WithPatchStart(cfg.PatchStart),
@@ -185,6 +194,9 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		sync.WithBackfillLimitPerRequest(cfg.BackfillLimitPerRequest),
 		sync.WithDeduper(deduper),
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	healthSvc := health.New(clientProvider)
 

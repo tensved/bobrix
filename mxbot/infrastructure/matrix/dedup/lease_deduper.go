@@ -15,22 +15,30 @@ type LeaseDeduper struct {
 
 	processed map[string]struct{}
 	inflight  map[string]time.Time // eventID -> expiresAt
+	ttl       time.Duration
 
 	// optional GC
 	gcEvery time.Duration
 	stopGC  chan struct{}
 }
 
-func NewLeaseDeduper(gcEvery time.Duration) *LeaseDeduper {
+func NewLeaseDeduper(gcEvery, ttl time.Duration) *LeaseDeduper {
 	if gcEvery <= 0 {
 		gcEvery = 30 * time.Second
 	}
+
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+
 	d := &LeaseDeduper{
 		processed: make(map[string]struct{}),
 		inflight:  make(map[string]time.Time),
 		gcEvery:   gcEvery,
 		stopGC:    make(chan struct{}),
+		ttl:       ttl,
 	}
+
 	go d.gcLoop()
 	return d
 }
@@ -59,16 +67,13 @@ func (d *LeaseDeduper) gcLoop() {
 	}
 }
 
-func (d *LeaseDeduper) TryStartProcessing(_ context.Context, eventID string, ttl time.Duration) (bool, error) {
+func (d *LeaseDeduper) TryStartProcessing(_ context.Context, eventID string) (bool, error) { //, ttl time.Duration
 	if eventID == "" {
 		return true, nil
 	}
-	if ttl <= 0 {
-		ttl = 5 * time.Minute
-	}
 
 	now := time.Now()
-	exp := now.Add(ttl)
+	exp := now.Add(d.ttl)
 
 	d.mu.Lock()
 	defer d.mu.Unlock()

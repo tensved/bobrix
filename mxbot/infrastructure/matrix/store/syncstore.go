@@ -12,7 +12,6 @@ import (
 )
 
 // FileSyncStore stores sync token and filter ID on disk.
-// Good enough for tests/single instance. For prod лучше БД.
 type FileSyncStore struct {
 	path string
 	mu   sync.Mutex

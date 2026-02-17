@@ -1,6 +1,8 @@
 package info
 
 import (
+	"errors"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 
@@ -14,11 +16,14 @@ type Service struct {
 	name   string
 }
 
-func New(c dbot.BotClient, name string) *Service {
+func New(c dbot.BotClient, name string) (*Service, error) {
+	if name == "" {
+		return nil, errors.New("bot name shouldnt be an empty string")
+	}
 	return &Service{
 		client: c.RawClient().(*mautrix.Client),
 		name:   name,
-	}
+	}, nil
 }
 
 func (b *Service) Name() string {

@@ -113,7 +113,8 @@ func (s *Service) backfillAllRooms(ctx context.Context) {
 	}
 
 	for _, roomID := range joined.JoinedRooms {
-		_ = s.backfillRoom(ctx, roomID)
+		if err := s.backfillRoom(ctx, roomID); err != nil {
+			slog.Error("backfillRoom", "roomID", roomID, "err", err)
+		}
 	}
-
 }

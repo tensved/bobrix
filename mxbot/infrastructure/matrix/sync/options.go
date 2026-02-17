@@ -60,9 +60,3 @@ func WithWorkers(w int) Option {
 		s.numWorkers = w
 	}
 }
-
-func WithInflightTTL(d time.Duration) Option {
-	return func(s *Service) {
-		s.inflightTTL = d
-	}
-}

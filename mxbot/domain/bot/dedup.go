@@ -2,7 +2,6 @@ package bot
 
 import (
 	"context"
-	"time"
 )
 
 // Dedyplication
@@ -12,7 +11,7 @@ type EventDeduper interface {
 	// - the event hasn't been processed yet
 	// - and isn't inflight (or the inflight has expired)
 	// Returns ok=true if we've captured the event and need to process it.
-	TryStartProcessing(ctx context.Context, eventID string, ttl time.Duration) (ok bool, err error)
+	TryStartProcessing(ctx context.Context, eventID string) (ok bool, err error) //, ttl time.Duration
 
 	// MarkProcessed marks successful processing (translates to processed, removes inflight).
 	MarkProcessed(ctx context.Context, eventID string) error

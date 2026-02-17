@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -36,33 +37,38 @@ type Service struct {
 	startOnce sync.Once
 	runOnce   sync.Once
 
-	workCh      chan *event.Event
-	numWorkers  int
-	inflightTTL time.Duration
+	workCh     chan *event.Event
+	numWorkers int
 
 	cancel context.CancelFunc
 }
 
-func New(c dbot.BotClient, sink dbot.EventSink, retry, inflightTTL time.Duration, numWorkers int, opts ...Option) *Service {
+func New(c dbot.BotClient, sink dbot.EventSink, authRetry time.Duration, numWorkers int, opts ...Option) (*Service, error) { //inflightTTL time.Duration,
+	if numWorkers < 1 {
+		return nil, errors.New("numWorkers should be >= 1")
+	}
+	if authRetry <= 0 {
+		authRetry = 5 * time.Second
+	}
+
 	s := &Service{
 		client: c.RawClient().(*mautrix.Client),
 		sink:   sink,
-		retry:  retry,
+		retry:  authRetry,
 
 		backfillDone: make(chan struct{}),
 
 		prevBatch: store.NewPrevBatchStore(),
 
-		workCh:      make(chan *event.Event, 10000),
-		numWorkers:  numWorkers,
-		inflightTTL: inflightTTL,
+		workCh:     make(chan *event.Event, 10000),
+		numWorkers: numWorkers,
 	}
 
 	for _, o := range opts {
 		o(s)
 	}
 
-	return s
+	return s, nil
 }
 
 func (s *Service) StartListening(ctx context.Context) error {
@@ -113,10 +119,10 @@ func (s *Service) startListening(ctx context.Context) error {
 			"timeline_events", totalTimeline,
 		)
 
-		totalState := 0
+		// totalState := 0
 		for _, roomData := range resp.Rooms.Join {
 			totalTimeline += len(roomData.Timeline.Events)
-			totalState += len(roomData.State.Events)
+			// totalState += len(roomData.State.Events)
 		}
 
 		// 1) Save prev_batch tokens per room for /messages backfill
@@ -143,11 +149,11 @@ func (s *Service) startListening(ctx context.Context) error {
 		}
 
 		// 3) Start backfill once (after we have at least some prev_batch tokens)
-		// if s.enableBackfill {
-		backfillOnce.Do(func() {
-			go s.backfillAllRooms(svcCtx)
-		})
-		// }
+		if s.enableBackfill {
+			backfillOnce.Do(func() {
+				go s.backfillAllRooms(svcCtx)
+			})
+		}
 
 		return true
 	})
@@ -169,7 +175,7 @@ func (s *Service) startListening(ctx context.Context) error {
 
 		// dedup
 		if s.deduper != nil && evt.ID != "" {
-			ok, err := s.deduper.TryStartProcessing(ctx, evt.ID.String(), s.inflightTTL)
+			ok, err := s.deduper.TryStartProcessing(ctx, evt.ID.String()) //, s.inflightTTL
 			if err != nil {
 				slog.Error("dedup: TryStartProcessing failed", "err", err, "id", evt.ID)
 				return
@@ -211,7 +217,7 @@ func (s *Service) run(ctx context.Context) {
 	for {
 		err := s.client.SyncWithContext(ctx)
 		if err != nil {
-			fmt.Printf("SYNC ERROR: %T %v\n", err, err)
+			slog.Error("SYNC ERROR:", "err", err)
 		}
 
 		if ctx.Err() != nil {
