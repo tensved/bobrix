@@ -3,7 +3,6 @@ package bot
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/event"
@@ -56,10 +55,6 @@ type DefaultBot struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// --- options
-	syncerTimeRetry time.Duration
-	typingTimeout   time.Duration
-
 	// --- filters
 	filters []domfilters.Filter
 }
@@ -104,9 +99,6 @@ func NewDefaultBot(
 		logger: logger,
 		ctx:    ctx,
 		cancel: cancel,
-
-		syncerTimeRetry: 5 * time.Second,
-		typingTimeout:   3 * time.Second,
 	}
 
 	b.filters = b.dispatcher.Filters()
@@ -119,17 +111,3 @@ func NewDefaultBot(
 
 	return b
 }
-
-func (b *DefaultBot) Info() dombot.BotInfo                { return b.info }
-func (b *DefaultBot) Messaging() dombot.BotMessaging      { return b.messaging }
-func (b *DefaultBot) Threads() dombot.BotThreads          { return b.threads }
-func (b *DefaultBot) Crypto() dombot.BotCrypto            { return b.crypto }
-func (b *DefaultBot) Client() dombot.BotClient            { return b.client }
-func (b *DefaultBot) EventLoader() dombot.EventLoader     { return b.eventLoader }
-func (b *DefaultBot) Rooms() dombot.BotRoomActions        { return b.rooms }
-func (b *DefaultBot) Typing() dombot.BotTyping            { return b.typing }
-func (b *DefaultBot) Sync() dombot.BotSync                { return b.sync }
-func (b *DefaultBot) Auth() dombot.BotAuth                { return b.auth }
-func (b *DefaultBot) Health() dombot.BotHealth            { return b.health }
-func (b *DefaultBot) Media() dombot.BotMedia              { return b.media }
-func (b *DefaultBot) Presence() dombot.BotPresenceControl { return b.persence }

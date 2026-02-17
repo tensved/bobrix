@@ -2,7 +2,6 @@ package mxbot
 
 import (
 	"fmt"
-	"time"
 
 	"maunium.net/go/mautrix/event"
 
@@ -47,14 +46,6 @@ func NewMatrixBot(cfg Config, opts ...applbot.BotOptions) (*applbot.DefaultBot, 
 		cfg.Credentials,
 		opts...,
 	), nil
-}
-
-func WithSyncerRetryTime(d time.Duration) BotOptions {
-	return applbot.WithSyncerRetryTime(d)
-}
-
-func WithTypingTimeout(d time.Duration) BotOptions {
-	return applbot.WithTypingTimeout(d)
 }
 
 func WithDisplayName(name string) BotOptions {
