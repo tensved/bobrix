@@ -166,7 +166,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 	)
 
 	// --- events (decrypt → dispatch)
-	sink := events.New(cryptoSvc, dispatcherSvc)
+	eventRouter := events.New(cryptoSvc, dispatcherSvc)
 
 	// --- sync (Matrix → events)
 
@@ -185,7 +185,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 
 	syncSvc, err := sync.New(
 		clientProvider,
-		sink,
+		eventRouter,
 		cfg.AuthRetry,
 		cfg.InflightTTL,
 		cfg.NumWorkers,

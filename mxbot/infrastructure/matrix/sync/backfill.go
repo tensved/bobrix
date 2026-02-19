@@ -79,7 +79,7 @@ func (s *Service) backfillRoom(ctx context.Context, roomID id.RoomID) error {
 				}
 			}
 
-			if err := s.sink.HandleMatrixEvent(ctx, evt); err != nil {
+			if err := s.eventRouter.HandleMatrixEvent(ctx, evt); err != nil {
 				// don't mark processed so we can repeat
 				slog.Error("backfill: HandleMatrixEvent failed",
 					"err", err, "type", evt.Type.String(), "room", evt.RoomID, "id", evt.ID)

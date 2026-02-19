@@ -20,10 +20,10 @@ var _ dbot.BotSync = (*Service)(nil)
 type Service struct {
 	client *mautrix.Client
 
-	sink    dbot.EventSink
-	auth    dbot.BotAuth
-	deduper dbot.EventDeduper
-	retry   time.Duration
+	eventRouter dbot.EventRouter
+	auth        dbot.BotAuth
+	deduper     dbot.EventDeduper
+	retry       time.Duration
 
 	joinStore  *store.JoinStore
 	prevBatch  *store.PrevBatchStore
@@ -44,7 +44,7 @@ type Service struct {
 	cancel context.CancelFunc
 }
 
-func New(c dbot.BotClient, sink dbot.EventSink, authRetry, inflightTTL time.Duration, numWorkers, workChCap int, opts ...Option) (*Service, error) {
+func New(c dbot.BotClient, eventRouter dbot.EventRouter, authRetry, inflightTTL time.Duration, numWorkers, workChCap int, opts ...Option) (*Service, error) { //sink dbot.EventSink
 	if numWorkers < 1 {
 		return nil, errors.New("numWorkers should be >= 1")
 	}
@@ -56,9 +56,9 @@ func New(c dbot.BotClient, sink dbot.EventSink, authRetry, inflightTTL time.Dura
 	}
 
 	s := &Service{
-		client: c.RawClient().(*mautrix.Client),
-		sink:   sink,
-		retry:  authRetry,
+		client:      c.RawClient().(*mautrix.Client),
+		eventRouter: eventRouter,
+		retry:       authRetry,
 
 		backfillDone: make(chan struct{}),
 
@@ -114,6 +114,11 @@ func (s *Service) startListening(ctx context.Context) error {
 	// so we capture it via OnSync.
 	var backfillOnce sync.Once
 	ds.OnSync(func(ctxSync context.Context, resp *mautrix.RespSync, since string) bool {
+		for _, evt := range resp.ToDevice.Events {
+			// these events should NOT go to dedup/message queue
+			_ = s.eventRouter.HandleMatrixEvent(ctxSync, evt)
+		}
+
 		totalTimeline := 0
 		totalState := 0
 		for _, roomData := range resp.Rooms.Join {
@@ -140,15 +145,6 @@ func (s *Service) startListening(ctx context.Context) error {
 		// and doesn't give us origin_server_ts.
 		if s.joinStore != nil {
 			for roomID, roomData := range resp.Rooms.Join {
-				// events := append(roomData.State.Events, roomData.Timeline.Events...)
-				// for _, evt := range events {
-				// 	if evt.Type == event.StateMember && evt.GetStateKey() == s.client.UserID.String() {
-				// 		if membership, _ := evt.Content.Raw["membership"].(string); membership == "join" {
-				// 			_ = s.joinStore.SetIfLater(roomID, evt.Timestamp)
-				// 		}
-				// 	}
-				// }
-
 				scan := func(evts []*event.Event) {
 					for _, evt := range evts {
 						if evt.Type == event.StateMember && evt.GetStateKey() == s.client.UserID.String() {
@@ -260,7 +256,7 @@ func (s *Service) worker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case evt := <-s.workCh:
-			if err := s.sink.HandleMatrixEvent(ctx, evt); err != nil {
+			if err := s.eventRouter.HandleMatrixEvent(ctx, evt); err != nil {
 				slog.Error("worker: HandleMatrixEvent failed", "err", err, "id", evt.ID, "room", evt.RoomID)
 				if s.deduper != nil && evt.ID != "" {
 					_ = s.deduper.UnmarkInflight(ctx, evt.ID.String())
