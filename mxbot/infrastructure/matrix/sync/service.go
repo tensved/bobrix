@@ -114,6 +114,14 @@ func (s *Service) startListening(ctx context.Context) error {
 	// so we capture it via OnSync.
 	var backfillOnce sync.Once
 	ds.OnSync(func(ctxSync context.Context, resp *mautrix.RespSync, since string) bool {
+		for roomID := range resp.Rooms.Invite {
+			if _, err := s.client.JoinRoom(ctxSync, roomID.String(), nil); err != nil {
+				slog.Error("sync: failed to join invited room", "room", roomID, "err", err)
+			} else {
+				slog.Info("sync: joined invited room", "room", roomID)
+			}
+		}
+
 		for _, evt := range resp.ToDevice.Events {
 			// these events should NOT go to dedup/message queue
 			_ = s.eventRouter.HandleMatrixEvent(ctxSync, evt)
