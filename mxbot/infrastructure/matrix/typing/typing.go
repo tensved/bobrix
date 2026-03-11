@@ -2,83 +2,186 @@ package typing
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"maunium.net/go/mautrix/id"
 )
 
-// typingData - struct for store information about typing by bots in rooms
-// it is used to avoid problem with cancelling typingEvent when bot have multiple requests at the same time
-type typingData struct {
-	data map[string]int
-	mx   *sync.RWMutex
+type typingState struct {
+	cancel context.CancelFunc
+	timer  *time.Timer
+	done   <-chan struct{} // Closes when the loop actually finishes
 }
 
-func (d *typingData) add(roomID id.RoomID) {
-	d.mx.Lock()
-	d.data[roomID.String()]++
-	d.mx.Unlock()
-}
-
-func (d *typingData) remove(roomID id.RoomID) {
-	d.mx.Lock()
-	defer d.mx.Unlock()
-
-	d.data[roomID.String()]--
-
-	if d.data[roomID.String()] == 0 {
-		delete(d.data, roomID.String())
+// EnsureTyping guarantees a maximum of one typing loop per roomID.
+// Each new call extends the TTL. When the TTL expires, typing is disabled and the state is removed from the map.
+// If the loop terminates early (ctx is canceled/error occurs), the state is also immediately removed from the map.
+func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl time.Duration) {
+	b.typingMu.Lock()
+	if b.typing == nil {
+		b.typing = make(map[id.RoomID]*typingState)
 	}
+
+	// prolongation
+	if st, ok := b.typing[roomID]; ok {
+		st.timer.Stop()
+		st.timer.Reset(ttl)
+		b.typingMu.Unlock()
+		return
+	}
+
+	loopCtx, loopCancel := context.WithCancel(workerCtx)
+
+	cancelLoop, done, err := b.LoopTyping(loopCtx, roomID)
+	if err != nil {
+		loopCancel()
+		b.typingMu.Unlock()
+		return
+	}
+
+	stop := func() {
+		// stop goroutine
+		loopCancel()
+		// terminate loop (idempotent)
+		cancelLoop()
+	}
+
+	st := &typingState{cancel: stop, done: done}
+	st.timer = time.AfterFunc(ttl, func() {
+		b.typingMu.Lock()
+		cur, ok := b.typing[roomID]
+		if ok && cur == st {
+			delete(b.typing, roomID)
+		}
+		b.typingMu.Unlock()
+
+		if ok && cur == st {
+			st.cancel()
+		}
+	})
+
+	b.typing[roomID] = st
+	b.typingMu.Unlock()
+
+	// clear the map immediately if the loop terminates before the ttl (shutdown/error)
+	go func() {
+		<-done
+		b.typingMu.Lock()
+		cur, ok := b.typing[roomID]
+		if ok && cur == st {
+			delete(b.typing, roomID)
+			st.timer.Stop()
+		}
+		b.typingMu.Unlock()
+	}()
 }
 
-var typing = typingData{
-	data: make(map[string]int),
-	mx:   &sync.RWMutex{},
-}
-
-// LoopTyping - Starts and stops typing on the room. Typing is sent every typingTimeout
-// it will be stopped if the context is cancelled or if an error occurs
-// it returns a function that can be used to stop the typing
-func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
+// LoopTyping starts typing=true immediately and then extends it every typingTimeout.
+// Returns:
+// - cancelTyping: stop the loop (idempotent)
+// - done: closes when the loop has completed
+func (b *Service) LoopTyping(loopCtx context.Context, roomID id.RoomID) (cancel func(), done <-chan struct{}, err error) {
 	ticker := time.NewTicker(b.typingTimeout)
 
-	typing.add(roomID)
-
-	err = b.StartTyping(ctx, roomID)
-	if err != nil {
-		return nil, err
+	// helper: each typing request with a separate timeout
+	doStart := func() error {
+		reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return b.StartTyping(reqCtx, roomID)
+	}
+	doStop := func() error {
+		reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return b.StopTyping(reqCtx, roomID)
 	}
 
-	cancel := make(chan struct{})
+	if err := doStart(); err != nil {
+		ticker.Stop()
+		return nil, nil, err
+	}
 
-	go func(c <-chan struct{}) {
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	var once sync.Once
+
+	go func() {
+		defer ticker.Stop()
+		defer close(doneCh)
+
+		// on any exit we try to turn off typing
+		defer func() {
+			if err := doStop(); err != nil {
+				// context canceled will almost never happen here, but just in case:
+				if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					b.logger.Error().Err(err).Msg("failed to stop typing")
+				}
+			}
+		}()
+
 		for {
 			select {
 			case <-ticker.C:
-				if err := b.StartTyping(ctx, roomID); err != nil {
-					b.logger.Error().Err(err).Msg("failed to stop typing")
+				if err := doStart(); err != nil {
+					if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+						b.logger.Error().Err(err).Msg("failed to start typing")
+					}
 				}
 
-			case <-c:
-				typing.remove(roomID)
+			case <-loopCtx.Done():
+				return
 
-				if err := b.StopTyping(ctx, roomID); err != nil {
-					b.logger.Error().Err(err).Msg("failed to stop typing")
-				}
-
+			case <-stopCh:
 				return
 			}
 		}
-	}(cancel)
+	}()
 
-	return func() {
-		cancel <- struct{}{}
-		ticker.Stop()
-
-		close(cancel)
-	}, nil
+	return func() { once.Do(func() { close(stopCh) }) }, doneCh, nil
 }
+
+// func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
+// 	ticker := time.NewTicker(b.typingTimeout)
+
+// 	typing.add(roomID)
+
+// 	err = b.StartTyping(ctx, roomID)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	cancel := make(chan struct{})
+
+// 	go func(c <-chan struct{}) {
+// 		for {
+// 			select {
+// 			case <-ticker.C:
+// 				if err := b.StartTyping(ctx, roomID); err != nil {
+// 					b.logger.Error().Err(err).Msg("failed to stop typing")
+// 				}
+
+// 			case <-c:
+// 				typing.remove(roomID)
+
+// 				stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 				defer cancel()
+
+// 				if err := b.StopTyping(stopCtx, roomID); err != nil {
+// 					b.logger.Error().Err(err).Msg("failed to stop typing")
+// 				}
+// 				return
+// 			}
+// 		}
+// 	}(cancel)
+
+// 	return func() {
+// 		cancel <- struct{}{}
+// 		ticker.Stop()
+
+// 		close(cancel)
+// 	}, nil
+// }
 
 // StartTyping - Starts typing on the room
 func (b *Service) StartTyping(ctx context.Context, roomID id.RoomID) error {

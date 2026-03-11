@@ -5,30 +5,43 @@ import "sync"
 type handlesStatus struct {
 	isHandled bool
 	mx        sync.Mutex
+
+	done chan struct{}
+	once sync.Once
 }
 
-func (s *handlesStatus) IsHandledWithUnlocker() (bool, func()) {
-	s.mx.Lock()
+func newHandlesStatus() *handlesStatus {
+	return &handlesStatus{
+		done: make(chan struct{}),
+	}
+}
 
+// Done closes when handled becomes true (once)
+func (s *handlesStatus) doneCh() <-chan struct{} {
+	return s.done
+}
+
+func (s *handlesStatus) markDoneIfHandledLocked() {
 	if s.isHandled {
-		s.mx.Unlock()
-		return true, func() {}
-	}
-
-	return false, func() {
-		s.isHandled = true
-		s.mx.Unlock()
+		s.once.Do(func() { close(s.done) })
 	}
 }
 
-func (s *handlesStatus) Check() bool {
+func (s *handlesStatus) isHandledWithUnlocker() (bool, func()) {
+	s.mx.Lock()
+	handled := s.isHandled
+	return handled, func() { s.mx.Unlock() }
+}
+
+func (s *handlesStatus) check() bool {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 	return s.isHandled
 }
 
-func (s *handlesStatus) Set(v bool) {
+func (s *handlesStatus) set(v bool) {
 	s.mx.Lock()
-	defer s.mx.Unlock()
 	s.isHandled = v
+	s.markDoneIfHandledLocked()
+	s.mx.Unlock()
 }

@@ -137,7 +137,7 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		cfg.TypingTimeout = defaultTypingTimeout
 	}
 
-	typingSvc := typing.New(clientProvider, cfg.TypingTimeout, cfg.Logger)
+	typingSvc := typing.New(clientProvider, cfg.TypingTimeout, cfg.Logger, context.Background())
 	roomsSvc := rooms.New(clientProvider)
 	threadsSvc := threads.New(clientProvider, cfg.Credentials.IsThreadEnabled, cfg.Credentials.ThreadLimit)
 	messagingSvc := messaging.New(clientProvider, cryptoSvc)

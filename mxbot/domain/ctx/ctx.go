@@ -25,6 +25,9 @@ type Ctx interface {
 	Thread() *threads.MessagesThread
 	SetThread(thread *threads.MessagesThread)
 
+	Send(msg messages.Message) error
+	TextSend(text string) error
+
 	Answer(msg messages.Message) error
 	TextAnswer(text string) error
 	ErrorAnswer(errorText string, errorType int) error
@@ -32,6 +35,12 @@ type Ctx interface {
 	IsHandled() bool
 	SetHandled()
 	IsHandledWithUnlocker() (bool, func())
+
+	Handled() <-chan struct{}
+	Cancel()
+
+	TryClaim() bool
+	IsClaimed() bool
 
 	Bot() botctx.Bot
 }

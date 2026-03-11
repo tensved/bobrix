@@ -60,7 +60,7 @@ func BobrixContractParser(bot mxbot.Bot) ContractParser {
 
 		requestMap, valid := requestData.(map[string]any)
 		if !valid {
-			slog.Error("request data is not a valid map", "event", evt)
+			slog.Error("request data is not a valid map", "evt", evt, "req data", requestData)
 			return nil
 		}
 

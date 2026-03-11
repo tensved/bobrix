@@ -23,12 +23,13 @@ func New(crypto bot.BotCrypto, sink bot.EventSink) *Service {
 }
 
 func (s *Service) HandleMatrixEvent(ctx context.Context, evt *event.Event) error {
-	// --- 1. to-device events (crypto-level)
+	s.crypto.ObserveEvent(evt)
+
+	// 1) to-device events
 	switch evt.Type {
 	case event.ToDeviceRoomKey,
 		event.ToDeviceRoomKeyRequest,
-		event.ToDeviceForwardedRoomKey,
-		event.EventEncrypted:
+		event.ToDeviceForwardedRoomKey:
 		s.crypto.HandleToDevice(ctx, evt)
 		return nil
 	}
@@ -38,7 +39,7 @@ func (s *Service) HandleMatrixEvent(ctx context.Context, evt *event.Event) error
 		return nil
 	}
 
-	// --- 2. encrypted → decrypt
+	// 2) encrypted → decrypt
 	decrypted, err := s.crypto.DecryptEvent(ctx, evt)
 	if err != nil {
 		return err

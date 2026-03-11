@@ -134,13 +134,6 @@ func (s *Service) startListening(ctx context.Context) error {
 			totalState += len(roomData.State.Events)
 		}
 
-		slog.Debug("sync: batch",
-			"since", since,
-			"next_batch", resp.NextBatch,
-			"timeline_events", totalTimeline,
-			"state_events", totalState,
-		)
-
 		// 1) Save prev_batch tokens per room for /messages backfill
 		for roomID, roomData := range resp.Rooms.Join {
 			if roomData.Timeline.PrevBatch != "" && s.prevBatch != nil {
@@ -178,12 +171,18 @@ func (s *Service) startListening(ctx context.Context) error {
 		return true
 	})
 
+	// for i := 0; i < s.numWorkers; i++ {
+	// 	go s.worker(ctx)
+	// }
+
 	for i := 0; i < s.numWorkers; i++ {
-		go s.worker(ctx)
+		go s.worker(ctx, i)
 	}
 
 	ds.OnEvent(func(ctxEvt context.Context, evt *event.Event) {
-		if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted {
+		if evt.Type != event.EventMessage &&
+			evt.Type != event.EventEncrypted &&
+			evt.Type != event.StateEncryption {
 			return
 		}
 
@@ -258,14 +257,22 @@ func (s *Service) run(ctx context.Context) {
 	}
 }
 
-func (s *Service) worker(ctx context.Context) {
+func (s *Service) worker(ctx context.Context, idx int) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case evt := <-s.workCh:
-			if err := s.eventRouter.HandleMatrixEvent(ctx, evt); err != nil {
-				slog.Error("worker: HandleMatrixEvent failed", "err", err, "id", evt.ID, "room", evt.RoomID)
+			start := time.Now()
+			slog.Info("worker: start", "w", idx, "id", evt.ID, "room", evt.RoomID)
+
+			err := s.eventRouter.HandleMatrixEvent(ctx, evt)
+
+			dur := time.Since(start)
+			if err != nil {
+				slog.Error("worker: HandleMatrixEvent failed",
+					"w", idx, "dur_ms", dur.Milliseconds(),
+					"err", err, "id", evt.ID, "room", evt.RoomID)
 				if s.deduper != nil && evt.ID != "" {
 					_ = s.deduper.UnmarkInflight(ctx, evt.ID.String())
 				}
@@ -274,14 +281,11 @@ func (s *Service) worker(ctx context.Context) {
 
 			if s.deduper != nil && evt.ID != "" {
 				if err := s.deduper.MarkProcessed(ctx, evt.ID.String()); err != nil {
-					// processed, but couldn't record - possible replay, that's ok
-					slog.Error("dedup: MarkProcessed failed", "err", err, "id", evt.ID)
+					slog.Error("dedup: MarkProcessed failed", "w", idx, "err", err, "id", evt.ID)
 				}
 			}
 
-			if evt.Type == event.EventMessage {
-				slog.Info("sync: handled ok", "room", evt.RoomID, "id", evt.ID)
-			}
+			slog.Info("worker: done", "w", idx, "dur_ms", dur.Milliseconds(), "id", evt.ID)
 		}
 	}
 }

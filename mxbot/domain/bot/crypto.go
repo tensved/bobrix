@@ -17,4 +17,6 @@ type BotCrypto interface {
 	EnsureOutboundSession(ctx context.Context, roomID id.RoomID) error
 	RequestKey(ctx context.Context, evt *event.Event) error
 	HandleToDevice(ctx context.Context, evt *event.Event)
+
+	ObserveEvent(evt *event.Event)
 }

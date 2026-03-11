@@ -158,11 +158,12 @@ func (bx *Bobrix) SetContractParser(
 					return nil
 				}
 
-				handled, unlock := ctx.IsHandledWithUnlocker()
-				if handled {
+				if ctx.IsHandled() {
 					return nil
 				}
-				defer unlock()
+				if !ctx.TryClaim() {
+					return nil
+				}
 
 				svc, ok := bx.GetService(strings.ToLower(req.ServiceName))
 				if !ok {
