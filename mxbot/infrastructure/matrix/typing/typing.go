@@ -141,48 +141,6 @@ func (b *Service) LoopTyping(loopCtx context.Context, roomID id.RoomID) (cancel 
 	return func() { once.Do(func() { close(stopCh) }) }, doneCh, nil
 }
 
-// func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
-// 	ticker := time.NewTicker(b.typingTimeout)
-
-// 	typing.add(roomID)
-
-// 	err = b.StartTyping(ctx, roomID)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	cancel := make(chan struct{})
-
-// 	go func(c <-chan struct{}) {
-// 		for {
-// 			select {
-// 			case <-ticker.C:
-// 				if err := b.StartTyping(ctx, roomID); err != nil {
-// 					b.logger.Error().Err(err).Msg("failed to stop typing")
-// 				}
-
-// 			case <-c:
-// 				typing.remove(roomID)
-
-// 				stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-// 				defer cancel()
-
-// 				if err := b.StopTyping(stopCtx, roomID); err != nil {
-// 					b.logger.Error().Err(err).Msg("failed to stop typing")
-// 				}
-// 				return
-// 			}
-// 		}
-// 	}(cancel)
-
-// 	return func() {
-// 		cancel <- struct{}{}
-// 		ticker.Stop()
-
-// 		close(cancel)
-// 	}, nil
-// }
-
 // StartTyping - Starts typing on the room
 func (b *Service) StartTyping(ctx context.Context, roomID id.RoomID) error {
 	_, err := b.client.UserTyping(ctx, roomID, true, b.typingTimeout)
