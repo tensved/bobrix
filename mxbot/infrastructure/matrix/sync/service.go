@@ -264,7 +264,6 @@ func (s *Service) worker(ctx context.Context, idx int) {
 			return
 		case evt := <-s.workCh:
 			start := time.Now()
-			slog.Info("worker: start", "w", idx, "id", evt.ID, "room", evt.RoomID)
 
 			err := s.eventRouter.HandleMatrixEvent(ctx, evt)
 
@@ -284,8 +283,6 @@ func (s *Service) worker(ctx context.Context, idx int) {
 					slog.Error("dedup: MarkProcessed failed", "w", idx, "err", err, "id", evt.ID)
 				}
 			}
-
-			slog.Info("worker: done", "w", idx, "dur_ms", dur.Milliseconds(), "id", evt.ID)
 		}
 	}
 }
