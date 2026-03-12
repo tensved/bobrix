@@ -100,7 +100,7 @@ func WithAutoSwitch() HealthcheckOption {
 }
 
 const (
-	defaultInterval = 15 * time.Second // default healthcheck interval
+	defaultInterval = 60 * time.Second // default healthcheck interval
 )
 
 // NewHealthcheck - healthcheck constructor

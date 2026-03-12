@@ -8,7 +8,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/id"
 
 	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 )
@@ -22,8 +21,8 @@ type Service struct {
 
 	baseCtx context.Context
 
-	typingMu sync.Mutex
-	typing   map[id.RoomID]*typingState
+	// key: id.RoomID, value: *roomTyping
+	rooms sync.Map
 }
 
 func New(
@@ -39,18 +38,16 @@ func New(
 		l := zerolog.New(os.Stdout).With().Timestamp().Logger()
 		logger = &l
 	}
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+
 	return &Service{
 		client:        c.RawClient().(*mautrix.Client),
 		typingTimeout: typingTimeout,
 		logger:        logger,
-
-		baseCtx: baseCtx,
-
-		typingMu: sync.Mutex{},
-		typing:   map[id.RoomID]*typingState{},
+		baseCtx:       baseCtx,
 	}
 }
 
-func (b *Service) GetTypingTimeout() time.Duration {
-	return b.typingTimeout
-}
+func (b *Service) GetTypingTimeout() time.Duration { return b.typingTimeout }
