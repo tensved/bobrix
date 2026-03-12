@@ -2,82 +2,75 @@ package typing
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"maunium.net/go/mautrix/id"
 )
 
-// typingData - struct for store information about typing by bots in rooms
-// it is used to avoid problem with cancelling typingEvent when bot have multiple requests at the same time
-type typingData struct {
-	data map[string]int
-	mx   *sync.RWMutex
-}
+// type typingState struct {
+// 	cancel context.CancelFunc
+// 	timer  *time.Timer
+// 	done   <-chan struct{} // Closes when the loop actually finishes
+// }
 
-func (d *typingData) add(roomID id.RoomID) {
-	d.mx.Lock()
-	d.data[roomID.String()]++
-	d.mx.Unlock()
-}
-
-func (d *typingData) remove(roomID id.RoomID) {
-	d.mx.Lock()
-	defer d.mx.Unlock()
-
-	d.data[roomID.String()]--
-
-	if d.data[roomID.String()] == 0 {
-		delete(d.data, roomID.String())
-	}
-}
-
-var typing = typingData{
-	data: make(map[string]int),
-	mx:   &sync.RWMutex{},
-}
-
-// LoopTyping - Starts and stops typing on the room. Typing is sent every typingTimeout
-// it will be stopped if the context is cancelled or if an error occurs
-// it returns a function that can be used to stop the typing
-func (b *Service) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
+// LoopTyping starts typing=true immediately and then extends it every typingTimeout.
+// Returns:
+// - cancelTyping: stop the loop (idempotent)
+// - done: closes when the loop has completed
+func (b *Service) LoopTyping(loopCtx context.Context, roomID id.RoomID) (cancel func(), done <-chan struct{}, err error) {
 	ticker := time.NewTicker(b.typingTimeout)
 
-	typing.add(roomID)
-
-	err = b.StartTyping(ctx, roomID)
-	if err != nil {
-		return nil, err
+	doStart := func() error {
+		reqCtx, cancel := context.WithTimeout(b.baseCtx, 5*time.Second)
+		defer cancel()
+		return b.StartTyping(reqCtx, roomID)
+	}
+	doStop := func() error {
+		reqCtx, cancel := context.WithTimeout(b.baseCtx, 5*time.Second)
+		defer cancel()
+		return b.StopTyping(reqCtx, roomID)
 	}
 
-	cancel := make(chan struct{})
+	if err := doStart(); err != nil {
+		ticker.Stop()
+		return nil, nil, err
+	}
 
-	go func(c <-chan struct{}) {
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	var once sync.Once
+
+	go func() {
+		defer ticker.Stop()
+		defer close(doneCh)
+
+		defer func() {
+			if err := doStop(); err != nil {
+				if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					b.logger.Error().Err(err).Msg("failed to stop typing")
+				}
+			}
+		}()
+
 		for {
 			select {
 			case <-ticker.C:
-				if err := b.StartTyping(ctx, roomID); err != nil {
-					b.logger.Error().Err(err).Msg("failed to stop typing")
+				if err := doStart(); err != nil {
+					if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+						b.logger.Error().Err(err).Msg("failed to start typing")
+					}
 				}
-
-			case <-c:
-				typing.remove(roomID)
-
-				if err := b.StopTyping(ctx, roomID); err != nil {
-					b.logger.Error().Err(err).Msg("failed to stop typing")
-				}
-
+			case <-loopCtx.Done():
+				return
+			case <-stopCh:
 				return
 			}
 		}
-	}(cancel)
+	}()
 
-	return func() {
-		cancel <- struct{}{}
-		ticker.Stop()
-
-		close(cancel)
-	}, nil
+	return func() { once.Do(func() { close(stopCh) }) }, doneCh, nil
 }
 
 // StartTyping - Starts typing on the room

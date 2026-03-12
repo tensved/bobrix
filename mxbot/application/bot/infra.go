@@ -88,7 +88,12 @@ func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID i
 }
 
 // ----- BotTyping
-func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), err error) {
+
+func (b *DefaultBot) EnsureTyping(ctx context.Context, roomID id.RoomID, ttl time.Duration) {
+	b.typing.EnsureTyping(ctx, roomID, ttl)
+}
+
+func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), ch <-chan struct{}, err error) {
 	return b.typing.LoopTyping(ctx, roomID)
 }
 
@@ -98,6 +103,10 @@ func (b *DefaultBot) StartTyping(ctx context.Context, roomID id.RoomID) error {
 
 func (b *DefaultBot) StopTyping(ctx context.Context, roomID id.RoomID) error {
 	return b.typing.StopTyping(ctx, roomID)
+}
+
+func (b *DefaultBot) GetTypingTimeout() time.Duration {
+	return b.typing.GetTypingTimeout()
 }
 
 // ----- BotSync
@@ -155,6 +164,10 @@ func (b *DefaultBot) RequestKey(ctx context.Context, evt *event.Event) error {
 
 func (b *DefaultBot) HandleToDevice(ctx context.Context, evt *event.Event) {
 	b.crypto.HandleToDevice(ctx, evt)
+}
+
+func (b *DefaultBot) ObserveEvent(evt *event.Event) {
+	b.crypto.ObserveEvent(evt)
 }
 
 // ----- EventDispatcher

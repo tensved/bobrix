@@ -3,7 +3,7 @@ package bot
 type FullBot interface {
 	BotAuth
 	BotInfo
-	BotMessaging
+	// BotMessaging // sens messages only using ctx.Answer (application lvl)
 	BotThreads
 	BotCrypto
 	BotClient

@@ -26,20 +26,11 @@ func (d *Dispatcher) HandleMatrixEvent(ctx context.Context, evt *event.Event) er
 		}
 	}
 
-	// --- typing ONLY for messages
-	var cancelTyping func()
 	if evt.Type == event.EventMessage {
-		var err error
-		cancelTyping, err = d.bot.LoopTyping(ctx, evt.RoomID)
-		if err != nil {
-			d.logger.Warn().Err(err).Msg("failed to start typing")
-		} else {
-			defer cancelTyping()
-		}
+		d.bot.EnsureTyping(ctx, evt.RoomID, d.bot.GetTypingTimeout())
 	}
 
 	eventContext, err := d.factory.New(ctx, evt)
-	defer eventContext.SetHandled()
 	if err != nil {
 		return err
 	}

@@ -29,6 +29,10 @@ type DefaultCtx struct {
 	mx      *sync.Mutex
 
 	handlesStatus *handlesStatus
+	cancel        context.CancelFunc
+
+	claimMu sync.Mutex
+	claimed bool
 }
 
 func NewDefaultCtx(
@@ -49,25 +53,34 @@ func NewDefaultCtx(
 		}
 	}
 
-	ctx = injectMetadataInContext(ctx, event, eventLoader)
+	evtCtx, cancel := context.WithCancel(ctx)
+	evtCtx = injectMetadataInContext(evtCtx, event, eventLoader)
 
 	return &DefaultCtx{
-		context:      ctx,
-		event:        event,
-		botMessaging: botMessaging,
-		botCtx:       botCtx,
-		thread:       thread,
-		storage:      map[string]any{},
-		mx:           &sync.Mutex{},
-		handlesStatus: &handlesStatus{
-			isHandled: false,
-			mx:        sync.Mutex{},
-		},
+		context:       evtCtx,
+		cancel:        cancel,
+		event:         event,
+		botMessaging:  botMessaging,
+		botCtx:        botCtx,
+		thread:        thread,
+		storage:       map[string]any{},
+		mx:            &sync.Mutex{},
+		handlesStatus: newHandlesStatus(),
 	}, nil
 }
 
+func (c *DefaultCtx) Handled() <-chan struct{} {
+	return c.handlesStatus.doneCh()
+}
+
+func (c *DefaultCtx) Cancel() {
+	if c.cancel != nil {
+		c.cancel()
+	}
+}
+
 func (c *DefaultCtx) IsHandledWithUnlocker() (bool, func()) {
-	return c.handlesStatus.IsHandledWithUnlocker()
+	return c.handlesStatus.isHandledWithUnlocker()
 }
 
 // Event - get the event from the context.
@@ -120,21 +133,11 @@ func (c *DefaultCtx) Bot() dombotctx.Bot {
 // it is a wrapper for bot.SendMessage
 // it returns an error if the message could not be sent
 func (c *DefaultCtx) Answer(msg messages.Message) error {
-	thread := c.thread
-	if thread != nil {
-		msg.SetRelatesTo(&event.RelatesTo{
-			Type:    event.RelThread,
-			EventID: thread.ParentID,
-			InReplyTo: &event.InReplyTo{
-				EventID: c.Event().ID,
-			},
-			IsFallingBack: true,
-		})
+	err := c.Send(msg)
+	if err == nil {
+		c.SetHandled()
 	}
-
-	msg.AddCustomFields(domctx.AnswerToCustomField, c.event.ID)
-
-	return c.botMessaging.SendMessage(c.Context(), c.event.RoomID, msg)
+	return err
 }
 
 // TextAnswer - send a text message to the room
@@ -149,17 +152,39 @@ func (c *DefaultCtx) ErrorAnswer(errorText string, errorType int) error {
 	return c.Answer(msg)
 }
 
+// Send - send a message to the room without marking it "handled."
+func (c *DefaultCtx) Send(msg messages.Message) error {
+	thread := c.thread
+	if thread != nil {
+		msg.SetRelatesTo(&event.RelatesTo{
+			Type:    event.RelThread,
+			EventID: thread.ParentID,
+			InReplyTo: &event.InReplyTo{
+				EventID: c.Event().ID,
+			},
+			IsFallingBack: true,
+		})
+	}
+
+	msg.AddCustomFields(domctx.AnswerToCustomField, c.event.ID)
+	return c.botMessaging.SendMessage(c.Context(), c.event.RoomID, msg)
+}
+
+func (c *DefaultCtx) TextSend(text string) error {
+	return c.Send(messages.NewText(text))
+}
+
 // Context - return the root context
 func (c *DefaultCtx) Context() context.Context {
 	return c.context
 }
 
 func (c *DefaultCtx) IsHandled() bool {
-	return c.handlesStatus.Check()
+	return c.handlesStatus.check()
 }
 
 func (c *DefaultCtx) SetHandled() {
-	c.handlesStatus.Set(true)
+	c.handlesStatus.set(true)
 }
 
 func (c *DefaultCtx) Thread() *threads.MessagesThread {
@@ -168,4 +193,38 @@ func (c *DefaultCtx) Thread() *threads.MessagesThread {
 
 func (c *DefaultCtx) SetThread(thread *threads.MessagesThread) {
 	c.thread = thread
+}
+
+// TryClaim atomically "claims" the current event context for handling.
+//
+// Purpose:
+//   - Prevent multiple handlers (e.g. contract parser + fallback) from processing/sending replies
+//     for the same incoming Matrix event.
+//   - This is separate from Handled(): claim means "I will handle it", handled means
+//     "a final reply was actually sent".
+//
+// Semantics:
+//   - Returns true only for the first caller.
+//   - All subsequent callers get false.
+//   - The claim is not released (one-shot) because the context is tied to a single event.
+func (c *DefaultCtx) TryClaim() bool {
+	c.claimMu.Lock()
+	defer c.claimMu.Unlock()
+	if c.claimed {
+		return false
+	}
+	c.claimed = true
+	return true
+}
+
+// IsClaimed reports whether the event context has already been claimed by some handler.
+//
+// Note:
+//   - This does NOT mean a reply was sent. For that, use IsHandled()/Handled().
+//   - Intended for early checks/short-circuiting in handlers that should run only
+//     if no one else has taken ownership of the event.
+func (c *DefaultCtx) IsClaimed() bool {
+	c.claimMu.Lock()
+	defer c.claimMu.Unlock()
+	return c.claimed
 }
