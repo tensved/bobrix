@@ -106,7 +106,7 @@ func (b *DefaultBot) StopTyping(ctx context.Context, roomID id.RoomID) error {
 }
 
 func (b *DefaultBot) GetTypingTimeout() time.Duration {
-	return b.GetTypingTimeout()
+	return b.typing.GetTypingTimeout()
 }
 
 // ----- BotSync
