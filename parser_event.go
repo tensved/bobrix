@@ -54,7 +54,6 @@ func BobrixContractParser(bot mxbot.Bot) ContractParser {
 
 		requestData, exists := evt.Content.Raw[BobrixPromptTag]
 		if !exists {
-			slog.Debug("no bobrix.prompt tag; skip", "event_id", evt.ID)
 			return nil
 		}
 

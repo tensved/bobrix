@@ -10,4 +10,5 @@ type BotCredentials struct {
 	PickleKey       []byte
 	IsThreadEnabled bool
 	ThreadLimit     int
+	AdminToken      string
 }
