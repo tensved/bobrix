@@ -34,17 +34,21 @@ func New(client *mautrix.Client, creds *infracfg.BotCredentials, name string) (*
 }
 
 func (a *Service) Authorize(ctx context.Context) error {
-	if err := a.authBot(ctx); err != nil {
-		if err := a.registerBot(ctx); err != nil {
-			return err
-		}
+	if err := a.authBot(ctx); err == nil {
+		return nil
 	}
-	return nil
+
+	// login failed - trying to create/update user
+	if err := a.registerBot(ctx); err != nil {
+		return err
+	}
+
+	return a.authBot(ctx)
 }
 
 // authBot - Authenticates the bot with the homeserver
 func (a *Service) authBot(ctx context.Context) error {
-	// Получаем текущую директорию
+	// Get the current directory
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
@@ -106,26 +110,6 @@ func (a *Service) authBot(ctx context.Context) error {
 	if whoami.UserID != resp.UserID {
 		return fmt.Errorf("user ID mismatch: got %s, expected %s", whoami.UserID, resp.UserID)
 	}
-
-	return nil
-}
-
-// registerBot - Registers the bot with the homeserver
-func (a *Service) registerBot(ctx context.Context) error {
-	resp, err := a.client.RegisterDummy(ctx, &mautrix.ReqRegister{
-		Username:     a.creds.Username,
-		Password:     a.creds.Password,
-		InhibitLogin: false,
-		Auth:         nil,
-		Type:         mautrix.AuthTypeDummy,
-	})
-	if err != nil {
-		return err
-	}
-
-	a.client.UserID = resp.UserID
-	a.client.AccessToken = resp.AccessToken
-	a.client.DeviceID = resp.DeviceID
 
 	return nil
 }
