@@ -32,6 +32,7 @@ import (
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/sync"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/threads"
 	"github.com/tensved/bobrix/mxbot/infrastructure/matrix/typing"
+	utils "github.com/tensved/bobrix/mxbot/infrastructure/utils"
 
 	"github.com/tensved/bobrix/mxbot/infrastructure/repository/pg"
 
@@ -95,15 +96,17 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 		return nil, fmt.Errorf("constructor: cfg.MatrixDB is required for PostgresDeduper")
 	}
 
+	safeUser := utils.SafeFilePart(cfg.Credentials.Username)
+
 	store, err := infrastore.NewFileSyncStore(
-		filepath.Join(".bin", "syncstore", cfg.Credentials.Username, "sync.json"),
+		filepath.Join(".bin", "syncstore", safeUser, "sync.json"),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	joinStore, err := infrastore.NewJoinStore(
-		filepath.Join(".bin", "syncstore", cfg.Credentials.Username, "join.json"),
+		filepath.Join(".bin", "syncstore", safeUser, "join.json"),
 	)
 	if err != nil {
 		return nil, err
