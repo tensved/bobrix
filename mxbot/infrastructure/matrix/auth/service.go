@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 
 	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 	infracfg "github.com/tensved/bobrix/mxbot/infrastructure/matrix/config"
+	utils "github.com/tensved/bobrix/mxbot/infrastructure/utils"
 )
 
 var _ dombot.BotAuth = (*Service)(nil)
@@ -54,8 +57,10 @@ func (a *Service) authBot(ctx context.Context) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	safeUser := utils.SafeFilePart(a.creds.Username)
+
 	// Check if a file with a saved device ID exists
-	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", a.creds.Username))
+	deviceIDFile := filepath.Join(currentDir, ".bin", "crypto", fmt.Sprintf("device-id-%s.txt", safeUser))
 	var deviceID id.DeviceID
 
 	if _, err := os.Stat(deviceIDFile); err == nil {
@@ -112,4 +117,22 @@ func (a *Service) authBot(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// оставляем буквы/цифры/._-@, остальное заменяем на _
+var reUnsafe = regexp.MustCompile(`[^a-zA-Z0-9._\-@]+`)
+
+func safeFilePart(s string) string {
+	s = strings.TrimSpace(s)
+	// на всякий случай убираем любые разделители пути текущей ОС
+	s = strings.ReplaceAll(s, string(filepath.Separator), "_")
+	// и второй разделитель (актуально для Windows, где могут встретиться оба)
+	s = strings.ReplaceAll(s, "/", "_")
+	s = strings.ReplaceAll(s, "\\", "_")
+
+	s = reUnsafe.ReplaceAllString(s, "_")
+	if s == "" {
+		s = "unknown"
+	}
+	return s
 }

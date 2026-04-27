@@ -14,6 +14,7 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	dbot "github.com/tensved/bobrix/mxbot/domain/bot"
+	utils "github.com/tensved/bobrix/mxbot/infrastructure/utils"
 )
 
 type Service struct {
@@ -30,7 +31,9 @@ func New(client *mautrix.Client, pickleKey []byte, name string) (*Service, error
 	dir := filepath.Join(".bin", "crypto")
 	_ = os.MkdirAll(dir, 0700)
 
-	store := filepath.Join(dir, "store-"+name+".db")
+	safeUser := utils.SafeFilePart(name)
+
+	store := filepath.Join(dir, "store-"+safeUser+".db")
 
 	helper, err := cryptohelper.NewCryptoHelper(client, pickleKey, store)
 	if err != nil {
