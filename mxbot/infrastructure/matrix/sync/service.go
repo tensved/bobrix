@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -171,10 +172,6 @@ func (s *Service) startListening(ctx context.Context) error {
 		return true
 	})
 
-	// for i := 0; i < s.numWorkers; i++ {
-	// 	go s.worker(ctx)
-	// }
-
 	for i := 0; i < s.numWorkers; i++ {
 		go s.worker(ctx, i)
 	}
@@ -258,6 +255,18 @@ func (s *Service) run(ctx context.Context) {
 }
 
 func (s *Service) worker(ctx context.Context, idx int) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error(
+				"worker panic recovered",
+				"panic",
+				r,
+				"stack",
+				string(debug.Stack()),
+			)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
