@@ -275,6 +275,7 @@ func (bx *Bobrix) SetContractParser(
 						return err
 					}
 				}
+				slog.Info("+++++++++++++ 12")
 
 				resp, err := svc.Service.CallMethod(
 					ctx.Context(),
