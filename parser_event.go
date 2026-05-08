@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/google/uuid"
 	"github.com/tensved/bobrix/mxbot"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -75,9 +76,14 @@ func BobrixContractParser(bot mxbot.Bot) ContractParser {
 			return nil
 		}
 
+		if serviceRequest.ServiceID == "" && serviceRequest.ServiceName == "" {
+			return nil
+		}
 		return &serviceRequest
 	}
 }
+
+var regexpServiceID = regexp.MustCompile(`-service_id:(?P<service_id>[0-9a-fA-F-]{36})`)
 
 // DefaultContractParser - default contract parser
 // it parses message text and extracts bot name, service name and method name
@@ -91,31 +97,34 @@ func DefaultContractParser(bot mxbot.Bot) ContractParser {
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
-
 		for _, filter := range filters {
 			if !filter(evt) {
-
 				return nil
 			}
 		}
 
 		eventMsg := evt.Content.AsMessage().Body
 
-		match := regexpMessage.FindStringSubmatch(eventMsg)
+		// service_id (preferred)
+		var serviceID string
+		if m := regexpServiceID.FindStringSubmatch(eventMsg); len(m) > 0 {
+			// m[0] full match, m[1] first group
+			serviceID = m[1]
+		}
 
-		if len(match) == 0 {
+		match := regexpMessage.FindStringSubmatch(eventMsg)
+		if len(match) == 0 && serviceID == "" {
 			return nil
 		}
 
 		groups := make(map[string]string)
 		for i, name := range regexpMessage.SubexpNames() {
-			if i != 0 && name != "" && match[i] != "" {
+			if i != 0 && name != "" && len(match) > i && match[i] != "" {
 				groups[name] = match[i]
 			}
 		}
 
 		inputs := regexpInputs.FindAllStringSubmatch(groups["inputs"], -1)
-
 		inputsData := make(map[string]any)
 
 		for _, input := range inputs {
@@ -124,13 +133,13 @@ func DefaultContractParser(bot mxbot.Bot) ContractParser {
 					inputsData[input[1]] = nil
 					continue
 				}
-
 				inputsData[input[1]] = input[2]
 			}
 		}
 
 		return &ServiceRequest{
-			ServiceName: groups["service"],
+			ServiceID:   serviceID,
+			ServiceName: groups["service"], // legacy
 			MethodName:  groups["method"],
 			InputParams: inputsData,
 		}
@@ -139,7 +148,8 @@ func DefaultContractParser(bot mxbot.Bot) ContractParser {
 
 type AudioMessageParserOpts struct {
 	Downloader  Downloader
-	ServiceName string
+	ServiceID   uuid.UUID
+	ServiceName string // optional/legacy
 	MethodName  string
 	InputName   string
 }
@@ -157,7 +167,6 @@ func AudioMessageContractParser(opts *AudioMessageParserOpts) ContractParser {
 	}
 
 	return func(evt *event.Event) *ServiceRequest {
-
 		for _, filter := range filters {
 			if !filter(evt) {
 				return nil
@@ -171,11 +180,11 @@ func AudioMessageContractParser(opts *AudioMessageParserOpts) ContractParser {
 		}
 
 		inputData := make(map[string]any, 1)
-
 		inputData[opts.InputName] = audioData
 
 		return &ServiceRequest{
-			ServiceName: opts.ServiceName,
+			ServiceID:   opts.ServiceID.String(),
+			ServiceName: opts.ServiceName, // optional
 			MethodName:  opts.MethodName,
 			InputParams: inputData,
 		}
@@ -188,7 +197,8 @@ type Downloader interface {
 
 type AutoParserOpts struct {
 	Bot         mxbot.Bot
-	ServiceName string
+	ServiceID   uuid.UUID
+	ServiceName string // optional/legacy
 	MethodName  string
 	InputName   string
 }
@@ -197,7 +207,6 @@ type AutoParserOpts struct {
 // It is convenient to use it in cases when you need to handle situations
 // when a user sends a message that should be sent immediately by a request
 func AutoRequestParser(opts *AutoParserOpts) ContractParser {
-
 	if opts == nil {
 		return nil
 	}
@@ -220,7 +229,8 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 		inputData[opts.InputName] = msg
 
 		return &ServiceRequest{
-			ServiceName: opts.ServiceName,
+			ServiceID:   opts.ServiceID.String(),
+			ServiceName: opts.ServiceName, // optional
 			MethodName:  opts.MethodName,
 			InputParams: inputData,
 		}
@@ -229,7 +239,8 @@ func AutoRequestParser(opts *AutoParserOpts) ContractParser {
 
 type ImageMessageParserOpts struct {
 	Downloader  mxbot.BotMedia
-	ServiceName string
+	ServiceID   uuid.UUID
+	ServiceName string // optional/legacy
 	MethodName  string
 	InputName   string
 }
@@ -238,12 +249,14 @@ type ImageMessageParserOpts struct {
 // It is required to specify strictly the name of the service and method, as well as the name for Input
 // because when sending an image there is no possibility to specify parameters by text
 func ImageMessageContractParser(opts *ImageMessageParserOpts) func(evt *event.Event) *ServiceRequest {
+	if opts == nil {
+		return func(evt *event.Event) *ServiceRequest { return nil }
+	}
 
 	return func(evt *event.Event) *ServiceRequest {
 		if evt.Type != event.EventMessage {
 			return nil
 		}
-
 		if evt.Content.AsMessage().MsgType != event.MsgImage {
 			return nil
 		}
@@ -255,11 +268,11 @@ func ImageMessageContractParser(opts *ImageMessageParserOpts) func(evt *event.Ev
 		}
 
 		inputData := make(map[string]any, 1)
-
 		inputData[opts.InputName] = imageData
 
 		return &ServiceRequest{
-			ServiceName: opts.ServiceName,
+			ServiceID:   opts.ServiceID.String(),
+			ServiceName: opts.ServiceName, // optional
 			MethodName:  opts.MethodName,
 			InputParams: inputData,
 		}

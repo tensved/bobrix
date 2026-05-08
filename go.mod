@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/gomarkdown/markdown v0.0.0-20240930133441-72d49d9543d8
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/rs/zerolog v1.34.0

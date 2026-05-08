@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/tensved/bobrix/contracts"
 	"github.com/tensved/bobrix/mxbot"
 	"maunium.net/go/mautrix/event"
@@ -26,12 +27,14 @@ type BobrixService struct {
 // Bobrix - bot structure
 // It is a connection structure between two components: it manages the bot and service contracts
 type Bobrix struct {
-	name          string
-	bot           mxbot.Bot
-	services      []*BobrixService
-	Healthchecker Healthcheck
+	name string
+	bot  mxbot.Bot
 
-	logger *slog.Logger
+	servicesByID     map[uuid.UUID]*BobrixService
+	serviceIDsByName map[string]uuid.UUID // основной алиас = текущее имя
+
+	Healthchecker Healthcheck
+	logger        *slog.Logger
 }
 
 type BobrixOpts func(*Bobrix)
@@ -52,10 +55,11 @@ func WithHealthcheck(healthCheckOpts ...HealthcheckOption) BobrixOpts {
 // NewBobrix - Bobrix constructor
 func NewBobrix(mxBot mxbot.Bot, opts ...BobrixOpts) *Bobrix {
 	bx := &Bobrix{
-		name:     mxBot.Name(),
-		bot:      mxBot,
-		services: []*BobrixService{},
-		logger:   slog.Default().With("name", mxBot.Name()),
+		name:             mxBot.Name(),
+		bot:              mxBot,
+		servicesByID:     make(map[uuid.UUID]*BobrixService),
+		serviceIDsByName: make(map[string]uuid.UUID),
+		logger:           slog.Default().With("name", mxBot.Name()),
 	}
 
 	for _, opt := range opts {
@@ -80,15 +84,35 @@ func (bx *Bobrix) Stop(ctx context.Context) error {
 // ConnectService - add service to the bot
 // It is used for adding services
 // It adds handler for processing the events of the service
-func (bx *Bobrix) ConnectService(
-	service *contracts.Service,
-	handler ServiceHandler,
-) {
-	bx.services = append(bx.services, &BobrixService{
+func (bx *Bobrix) ConnectService(service *contracts.Service, handler ServiceHandler) uuid.UUID {
+	if service == nil {
+		bx.logger.Error("ConnectService: nil service")
+		return uuid.Nil
+	}
+	if service.ID == uuid.Nil {
+		bx.logger.Warn("ConnectService: service has nil ID, generating", "name", service.Name)
+		service.ID = uuid.New()
+	}
+
+	bx.logger.Info("ConnectService",
+		"service_id", service.ID.String(),
+		"service_name", service.Name,
+	)
+
+	// if service.ID == uuid.Nil {
+	// 	service.ID = uuid.New()
+	// }
+
+	bs := &BobrixService{
 		Service:  service,
 		Handler:  handler,
 		IsOnline: true,
-	})
+	}
+
+	bx.servicesByID[service.ID] = bs
+	bx.serviceIDsByName[strings.ToLower(service.Name)] = service.ID
+
+	return service.ID
 }
 
 // Use - add handler to the bot
@@ -99,20 +123,25 @@ func (bx *Bobrix) Use(handler mxbot.EventHandler) {
 
 // GetService - return service by name. If the service is not found, it returns nil
 // It is case-insensitive. All services are stored in lowercase
-func (bx *Bobrix) GetService(name string) (*BobrixService, bool) {
-	name = strings.ToLower(name)
+func (bx *Bobrix) GetServiceByID(id uuid.UUID) (*BobrixService, bool) {
+	svc, ok := bx.servicesByID[id]
+	return svc, ok
+}
 
-	for _, botService := range bx.services {
-		if strings.ToLower(botService.Service.Name) == name {
-			return botService, true
-		}
+func (bx *Bobrix) GetServiceByName(name string) (*BobrixService, bool) {
+	id, ok := bx.serviceIDsByName[strings.ToLower(name)]
+	if !ok {
+		return nil, false
 	}
-
-	return nil, false
+	return bx.GetServiceByID(id)
 }
 
 func (bx *Bobrix) Services() []*BobrixService {
-	return bx.services
+	out := make([]*BobrixService, 0, len(bx.servicesByID))
+	for _, svc := range bx.servicesByID {
+		out = append(out, svc)
+	}
+	return out
 }
 
 func (bx *Bobrix) Bot() mxbot.Bot {
@@ -121,6 +150,7 @@ func (bx *Bobrix) Bot() mxbot.Bot {
 
 type ServiceRequest struct {
 	ServiceName string         `json:"service"`
+	ServiceID   string         `json:"service_id"`
 	MethodName  string         `json:"method"`
 	InputParams map[string]any `json:"inputs"`
 }
@@ -151,10 +181,33 @@ func (bx *Bobrix) SetContractParser(
 			func(ctx mxbot.Ctx) error {
 				req := parser(ctx.Event())
 
-				// if request is nil, it means that the event does not match the contract
-				// and the event should be ignored
-				// or the service is not found
-				if req == nil || req.ServiceName == "" {
+				bx.logger.Info("incoming request",
+					"event_id", ctx.Event().ID.String(),
+					"room_id", ctx.Event().RoomID.String(),
+					"service_id", req.ServiceID,
+					"service_name", req.ServiceName,
+					"method", req.MethodName,
+				)
+
+				ids := make([]string, 0, len(bx.servicesByID))
+				for id, s := range bx.servicesByID {
+					ids = append(ids, id.String()+"("+s.Service.Name+")")
+				}
+				bx.logger.Info("registered services", "count", len(ids), "services", ids)
+
+				if raw := ctx.Event().Content.Raw; raw != nil {
+					if p, ok := raw[BobrixPromptTag]; ok {
+						bx.logger.Info("raw bobrix.prompt", "prompt", p)
+					}
+				}
+
+				// ignore non-contract events
+				if req == nil {
+					return nil
+				}
+
+				// must have at least service_id or service name
+				if req.ServiceID == "" && req.ServiceName == "" {
 					return nil
 				}
 
@@ -165,35 +218,58 @@ func (bx *Bobrix) SetContractParser(
 					return nil
 				}
 
-				svc, ok := bx.GetService(strings.ToLower(req.ServiceName))
-				if !ok {
-					bx.logger.Error("service not found", "service", req.ServiceName, "services", fmt.Sprintf("%+v", bx.services[0].Service.Name))
-					return ctx.ErrorAnswer(
-						fmt.Sprintf("Service %q not found", req.ServiceName),
-						contracts.ErrCodeServiceNotFound,
-					)
+				// --- Resolve service: prefer ServiceID, fallback to ServiceName ---
+				var (
+					svc *BobrixService
+					ok  bool
+				)
+
+				if req.ServiceID != "" {
+					id, err := uuid.Parse(req.ServiceID)
+					if err != nil {
+						return ctx.ErrorAnswer(
+							fmt.Sprintf("Invalid service_id %q", req.ServiceID),
+							contracts.ErrCodeBadRequest,
+						)
+					}
+
+					svc, ok = bx.GetServiceByID(id)
+					if !ok && req.ServiceName != "" {
+						bx.logger.Warn("service_id not found, fallback to name",
+							"service_id", req.ServiceID,
+							"service_name", req.ServiceName,
+						)
+						svc, ok = bx.GetServiceByName(req.ServiceName)
+					}
+				} else {
+					svc, ok = bx.GetServiceByName(req.ServiceName)
+					if !ok {
+						bx.logger.Error("service not found", "service", req.ServiceName)
+						return ctx.ErrorAnswer(
+							fmt.Sprintf("Service %q not found", req.ServiceName),
+							contracts.ErrCodeServiceNotFound,
+						)
+					}
 				}
 
-				// if service is not online, send an error and return
-				// IsOnline is true by default. But it can be changed with Healthcheck with WithAutoSwitch() option
+				// service offline
 				if !svc.IsOnline {
 					svc.Handler(ctx, &contracts.MethodResponse{
-						Err: fmt.Errorf("Service \"%s\" is offline", req.ServiceName),
+						Err: fmt.Errorf("Service %q is offline", svc.Service.Name),
 					}, nil)
 					return nil
 				}
 
-				opts := contracts.CallOpts{}
-
+				callOpts := contracts.CallOpts{}
 				if thread := ctx.Thread(); thread != nil {
 					data := ConvertThreadToMessages(thread, ctx.Bot().FullName())
-					opts.Messages = data
+					callOpts.Messages = data
 				}
 
 				if opt.PreCallHook != nil {
 					errMsg, errCode, err := opt.PreCallHook(ctx, req)
 					if err != nil {
-						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil { //!
+						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
 							return err
 						}
 						return err
@@ -204,21 +280,27 @@ func (bx *Bobrix) SetContractParser(
 					ctx.Context(),
 					req.MethodName,
 					req.InputParams,
-					opts,
+					callOpts,
 				)
 				if err != nil {
 					switch {
 					case errors.Is(err, contracts.ErrMethodNotFound):
-						if err := ctx.ErrorAnswer(fmt.Sprintf("Method \"%s\" not found", req.MethodName), contracts.ErrCodeMethodNotFound); err != nil {
+						if err := ctx.ErrorAnswer(
+							fmt.Sprintf("Method %q not found", req.MethodName),
+							contracts.ErrCodeMethodNotFound,
+						); err != nil {
 							return err
 						}
-
 					default:
-						if err := ctx.ErrorAnswer(err.Error(), resp.ErrCode); err != nil {
+						// resp may be nil if CallMethod returned error before response creation
+						errCode := contracts.ErrCodeInternalServiceError
+						if resp != nil && resp.ErrCode != 0 {
+							errCode = resp.ErrCode
+						}
+						if err := ctx.ErrorAnswer(err.Error(), errCode); err != nil {
 							return err
 						}
 					}
-
 					return nil
 				}
 
