@@ -12,4 +12,6 @@ var (
 const (
 	ErrCodeServiceNotFound = 1 // "service not found"
 	ErrCodeMethodNotFound  = 2 // "method not found"
+	ErrCodeBadRequest = 3 //todo
+	ErrCodeInternalServiceError = 4
 )

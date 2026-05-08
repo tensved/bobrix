@@ -4,10 +4,16 @@ import "fmt"
 
 // MethodResponse describes the response of a method, including output data and any errors.
 type MethodResponse struct {
-	Outputs     map[string]Output // Outputs contains the output data of the method.
-	ServiceName string            // ServiceName is the name of the service that the method belongs to.
-	Err         error             // Err contains any error encountered during method execution.
-	ErrCode     int               // ErrCode is the error code of the method.
+	Outputs map[string]Output // Outputs contains the output data of the method.
+
+	// ServiceID is the stable identifier of the service (preferred for any lookups).
+	ServiceID string `json:"service_id,omitempty"`
+
+	// ServiceName is the human-readable name of the service (optional/legacy/UI).
+	ServiceName string `json:"service_name,omitempty"`
+
+	Err     error // Err contains any error encountered during method execution.
+	ErrCode int   // ErrCode is the error code of the method.
 }
 
 // Get retrieves the value of a specific output by name.
@@ -20,13 +26,10 @@ func (m *MethodResponse) Get(name string) (any, bool) {
 // GetString retrieves the string representation of a specific output by name.
 // It returns the formatted value and a boolean indicating whether the output was found.
 func (m *MethodResponse) GetString(name string) (string, bool) {
-
 	output, ok := m.Outputs[name]
-
 	if !ok {
 		return "", false
 	}
-
 	return fmt.Sprintf("%v", output.Value()), true
 }
 

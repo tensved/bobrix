@@ -19,10 +19,23 @@ type Health struct {
 }
 
 // BobrixStatus - status of the bot. Contains the health of the bot and the health of the services
+// type BobrixStatus struct {
+// 	MatrixStatus Health            `json:"matrix"`
+// 	Services     map[string]Health `json:"services"`
+// 	Health
+// }
+
+type ServiceStatus struct {
+	ServiceID   string `json:"service_id"`
+	ServiceName string `json:"service_name"`
+	Health      Health `json:"health"`
+	Online      bool   `json:"online"`
+}
+
 type BobrixStatus struct {
-	MatrixStatus Health            `json:"matrix"`
-	Services     map[string]Health `json:"services"`
-	Health
+	MatrixStatus Health                   `json:"matrix_status"`
+	Services     map[string]ServiceStatus `json:"services"` // key = service_id
+	Health       Health                   `json:"health"`
 }
 
 // Subscriber - subscriber for healthcheck.
@@ -178,54 +191,76 @@ func (h *DefaultHealthcheck) goHealthCheck() {
 // GetHealth - returns current healthcheck status
 // Returns healthcheck status
 func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
-
 	ctx := context.Background()
 	wg := &sync.WaitGroup{}
 
 	var botStatus Health
 	wg.Add(1)
-
 	go func() {
+		defer wg.Done()
 		botStatus = h.getBotStatus(ctx)
-		wg.Done()
 	}()
 
-	svcLength := len(h.bobrix.services) // length of services array
+	services := h.bobrix.Services()
+	svcLength := len(services)
 
-	serviceStatuses := make(map[string]Health, svcLength)
+	serviceStatuses := make(map[string]ServiceStatus, svcLength)
 	mx := &sync.Mutex{}
 
-	wg.Add(svcLength) // add wg for each service
-
-	for i, service := range h.bobrix.services {
-
-		go func(i int, service *BobrixService) {
+	wg.Add(svcLength)
+	for _, service := range services {
+		go func(service *BobrixService) {
+			defer wg.Done()
 
 			health := h.getServiceHealth(ctx, service)
-
-			// if isAutoSwitch is enabled, update service status based on health
-			if h.isAutoSwitch {
-				if health.Status == healthOk {
-					h.bobrix.services[i].IsOnline = true
-
-					h.bobrix.bot.SetOnlineStatus()
-				} else {
-					h.bobrix.services[i].IsOnline = false
-
-					h.bobrix.bot.SetIdleStatus()
-				}
-			}
+			id := service.Service.ID.String()
 
 			mx.Lock()
-			serviceStatuses[service.Service.Name] = health
+			serviceStatuses[id] = ServiceStatus{
+				ServiceID:   id,
+				ServiceName: service.Service.Name,
+				Health:      health,
+				Online:      service.IsOnline, // временно, обновим ниже если auto-switch
+			}
 			mx.Unlock()
-
-			wg.Done()
-		}(i, service)
+		}(service)
 	}
 
-	wg.Wait() // wait for all pings to finish (bot and services)
+	wg.Wait()
 
+	// --- Auto-switch: принимаем решение один раз, после сбора всех health ---
+	if h.isAutoSwitch {
+		anyServiceError := false
+		for _, st := range serviceStatuses {
+			if st.Health.Status == healthError {
+				anyServiceError = true
+				break
+			}
+		}
+
+		// Обновляем IsOnline у сервисов и отражаем это в serviceStatuses
+		for _, service := range services {
+			id := service.Service.ID.String()
+
+			st := serviceStatuses[id]
+			if st.Health.Status == healthOk {
+				service.IsOnline = true
+			} else {
+				service.IsOnline = false
+			}
+			st.Online = service.IsOnline
+			serviceStatuses[id] = st
+		}
+
+		// Статус бота: online только если все сервисы ok
+		if anyServiceError {
+			h.bobrix.bot.SetIdleStatus()
+		} else {
+			h.bobrix.bot.SetOnlineStatus()
+		}
+	}
+
+	// --- Итоговый health Bobrix ---
 	bobrixHealth := Health{
 		LastChecked: time.Now(),
 		Status:      healthOk,
@@ -236,8 +271,9 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 	}
 
 	for _, svc := range serviceStatuses {
-		if svc.Status == healthError {
+		if svc.Health.Status == healthError {
 			bobrixHealth.Status = healthError
+			break
 		}
 	}
 
@@ -247,6 +283,75 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 		Health:       bobrixHealth,
 	}
 }
+
+// func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
+// 	ctx := context.Background()
+// 	wg := &sync.WaitGroup{}
+
+// 	var botStatus Health
+// 	wg.Add(1)
+// 	go func() {
+// 		defer wg.Done()
+// 		botStatus = h.getBotStatus(ctx)
+// 	}()
+
+// 	services := h.bobrix.Services()
+// 	svcLength := len(services)
+
+// 	// Лучше бы map[uuid.UUID]Health, но оставляю map[string]Health, чтобы меньше ломать API.
+// 	// Ключ = service_id
+// 	serviceStatuses := make(map[string]Health, svcLength)
+// 	mx := &sync.Mutex{}
+
+// 	wg.Add(svcLength)
+// 	for _, service := range services {
+// 		go func(service *BobrixService) {
+// 			defer wg.Done()
+
+// 			health := h.getServiceHealth(ctx, service)
+
+// 			// auto-switch: обновляем флаг прямо в объекте сервиса
+// 			if h.isAutoSwitch {
+// 				if health.Status == healthOk {
+// 					service.IsOnline = true
+// 					h.bobrix.bot.SetOnlineStatus()
+// 				} else {
+// 					service.IsOnline = false
+// 					h.bobrix.bot.SetIdleStatus()
+// 				}
+// 			}
+
+// 			mx.Lock()
+// 			// ключуем по ID, а не по имени
+// 			serviceStatuses[service.Service.ID.String()] = health
+// 			mx.Unlock()
+// 		}(service)
+// 	}
+
+// 	wg.Wait()
+
+// 	bobrixHealth := Health{
+// 		LastChecked: time.Now(),
+// 		Status:      healthOk,
+// 	}
+
+// 	if botStatus.Status == healthError {
+// 		bobrixHealth.Status = healthError
+// 	}
+
+// 	for _, svc := range serviceStatuses {
+// 		if svc.Status == healthError {
+// 			bobrixHealth.Status = healthError
+// 			break
+// 		}
+// 	}
+
+// 	return &BobrixStatus{
+// 		MatrixStatus: botStatus,
+// 		Services:     serviceStatuses,
+// 		Health:       bobrixHealth,
+// 	}
+// }
 
 func (h *DefaultHealthcheck) getBotStatus(ctx context.Context) Health {
 	status := Health{

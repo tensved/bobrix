@@ -3,12 +3,15 @@ package contracts
 import (
 	"context"
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 // Service - describes the service of the application
 // Contains the name, description and methods
 // Can be used to call methods
 type Service struct {
+	ID          uuid.UUID         `json:"id" yaml:"id"`
 	Name        string            `json:"name" yaml:"name"`
 	Description map[string]string `json:"description,omitempty" yaml:"description,omitempty"`
 
@@ -64,6 +67,7 @@ func (s *Service) GetDefaultMethod() *Method {
 // ServicePublic - describes the service as public.
 // It can be used to print information about the service without sensitive data
 type ServicePublic struct {
+	ID          uuid.UUID               `json:"id" yaml:"id"`
 	Name        string                  `json:"name" yaml:"name"`
 	Description map[string]string       `json:"description,omitempty" yaml:"description,omitempty"`
 	Methods     map[string]MethodPublic `json:"methods" yaml:"methods"`
