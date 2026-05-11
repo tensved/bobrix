@@ -3,9 +3,10 @@ package contracts
 import (
 	"context"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"net/url"
+
+	"github.com/gorilla/websocket"
 )
 
 // HTTPOptions holds configuration options for HTTP requests.

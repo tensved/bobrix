@@ -10,8 +10,8 @@ var (
 )
 
 const (
-	ErrCodeServiceNotFound = 1 // "service not found"
-	ErrCodeMethodNotFound  = 2 // "method not found"
-	ErrCodeBadRequest = 3 //todo
-	ErrCodeInternalServiceError = 4
+	ErrCodeBadRequest           = 400 // invalid request / validation error
+	ErrCodeServiceNotFound      = 404 // service not found
+	ErrCodeMethodNotFound       = 405 // method not found
+	ErrCodeInternalServiceError = 500 // internal server error
 )
