@@ -42,8 +42,7 @@ import (
 )
 
 var (
-	defaultSyncerRetryTime = 5 * time.Second
-	defaultTypingTimeout   = 30 * time.Second
+	defaultTypingTimeout = 30 * time.Second
 )
 
 type Config struct {

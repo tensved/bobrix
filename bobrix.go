@@ -31,7 +31,7 @@ type Bobrix struct {
 	bot  mxbot.Bot
 
 	servicesByID     map[uuid.UUID]*BobrixService
-	serviceIDsByName map[string]uuid.UUID // основной алиас = текущее имя
+	serviceIDsByName map[string]uuid.UUID
 
 	Healthchecker Healthcheck
 	logger        *slog.Logger
@@ -93,15 +93,6 @@ func (bx *Bobrix) ConnectService(service *contracts.Service, handler ServiceHand
 		bx.logger.Warn("ConnectService: service has nil ID, generating", "name", service.Name)
 		service.ID = uuid.New()
 	}
-
-	bx.logger.Info("ConnectService",
-		"service_id", service.ID.String(),
-		"service_name", service.Name,
-	)
-
-	// if service.ID == uuid.Nil {
-	// 	service.ID = uuid.New()
-	// }
 
 	bs := &BobrixService{
 		Service:  service,
@@ -181,19 +172,10 @@ func (bx *Bobrix) SetContractParser(
 			func(ctx mxbot.Ctx) error {
 				req := parser(ctx.Event())
 
-				bx.logger.Info("incoming request",
-					"event_id", ctx.Event().ID.String(),
-					"room_id", ctx.Event().RoomID.String(),
-					"service_id", req.ServiceID,
-					"service_name", req.ServiceName,
-					"method", req.MethodName,
-				)
-
 				ids := make([]string, 0, len(bx.servicesByID))
 				for id, s := range bx.servicesByID {
 					ids = append(ids, id.String()+"("+s.Service.Name+")")
 				}
-				bx.logger.Info("registered services", "count", len(ids), "services", ids)
 
 				if raw := ctx.Event().Content.Raw; raw != nil {
 					if p, ok := raw[BobrixPromptTag]; ok {
@@ -275,7 +257,6 @@ func (bx *Bobrix) SetContractParser(
 						return err
 					}
 				}
-				slog.Info("+++++++++++++ 12")
 
 				resp, err := svc.Service.CallMethod(
 					ctx.Context(),
