@@ -75,6 +75,7 @@ type Output struct {
 	Description  map[string]string `json:"description,omitempty" yaml:"description,omitempty"` // Optional description of the output.
 	DefaultValue any               `json:"default,omitempty" yaml:"default,omitempty"`         // Optional default value for the output.
 	IsPrivate    bool              `json:"is_private" yaml:"is_private"`                       // Indicates if the output is private (for users). TODO: rename.
+	Metadata     map[string]any    `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 	value        any
 }
 
@@ -88,6 +89,14 @@ func (o *Output) Value() any {
 	return o.value
 }
 
+func (o *Output) SetMetadataVal(key string, val any) {
+	o.Metadata[key] = val
+}
+
+func (o *Output) SetMetadata(metadata map[string]any) {
+	o.Metadata = metadata
+}
+
 func (o *Output) AsPublic() OutputPublic {
 	return OutputPublic{
 		Name:         o.Name,
@@ -95,6 +104,7 @@ func (o *Output) AsPublic() OutputPublic {
 		Description:  o.Description,
 		DefaultValue: o.DefaultValue,
 		IsPrivate:    o.IsPrivate,
+		Metadata:     o.Metadata,
 	}
 }
 
@@ -115,4 +125,5 @@ type OutputPublic struct {
 	Description  map[string]string `json:"description,omitempty" yaml:"description,omitempty"` // Optional description of the output.
 	DefaultValue any               `json:"default,omitempty" yaml:"default,omitempty"`         // Optional default value for the output.
 	IsPrivate    bool              `json:"is_private" yaml:"is_private"`                       // Indicates if the output is private (for users). TODO: rename.
+	Metadata     map[string]any    `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }

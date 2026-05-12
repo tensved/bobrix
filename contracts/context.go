@@ -35,7 +35,9 @@ type HandlerContext interface {
 	Inputs() map[string]Input
 
 	// Set assigns a value to the specified output.
-	Set(outputName string, value any)
+	SetOutput(outputName string, value any)
+
+	SetOutputWithMetadata(outputName string, outputValue any, metadata map[string]any)
 
 	// GetOutput retrieves an Output by its name, if present.
 	GetOutput(name string) (Output, bool)
@@ -163,11 +165,20 @@ func (h *DefaultHandlerContext) Inputs() map[string]Input {
 	return h.inputs
 }
 
-func (h *DefaultHandlerContext) Set(outputName string, value any) {
+func (h *DefaultHandlerContext) SetOutput(outputName string, value any) {
 	out, ok := h.outputs[outputName]
 	if ok {
 		out.SetValue(value)
 		h.outputs[outputName] = out
+	}
+}
+
+func (h *DefaultHandlerContext) SetOutputWithMetadata(outputName string, outputValue any, metadata map[string]any) {
+	out, ok := h.outputs[outputName]
+	if ok {
+		out.SetValue(outputValue)
+		h.outputs[outputName] = out
+		out.SetMetadata(metadata)
 	}
 }
 
@@ -203,7 +214,7 @@ func (h *DefaultHandlerContext) JSON(i any) error {
 
 	// Set each key-value pair in the outputs map.
 	for k, v := range outputsMap {
-		h.Set(k, v)
+		h.SetOutput(k, v)
 	}
 
 	return nil
