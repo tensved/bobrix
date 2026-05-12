@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 )
 
 // HandlerContext defines an interface for managing inputs and outputs
@@ -173,13 +174,22 @@ func (h *DefaultHandlerContext) SetOutput(outputName string, value any) {
 	}
 }
 
-func (h *DefaultHandlerContext) SetOutputWithMetadata(outputName string, outputValue any, metadata map[string]any) {
+func (h *DefaultHandlerContext) SetOutputWithMetadata(
+	outputName string,
+	outputValue any,
+	metadata map[string]any,
+) {
 	out, ok := h.outputs[outputName]
-	if ok {
-		out.SetValue(outputValue)
-		h.outputs[outputName] = out
-		out.SetMetadata(metadata)
+	if !ok {
+		return
 	}
+
+	out.SetValue(outputValue)
+	out.SetMetadata(metadata)
+
+	h.outputs[outputName] = out
+
+	slog.Info("out metadata", "outputs", h.outputs)
 }
 
 func (h *DefaultHandlerContext) GetOutput(name string) (Output, bool) {
