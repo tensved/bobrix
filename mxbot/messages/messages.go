@@ -2,8 +2,9 @@ package messages
 
 import (
 	"encoding/json"
-	"github.com/gomarkdown/markdown"
 	"log/slog"
+
+	"github.com/gomarkdown/markdown"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -24,7 +25,7 @@ type Message interface {
 
 	SetRelatesTo(rel *event.RelatesTo)
 
-	AddCustomFields(values ...any) // add custom fields to message. Required use as < key, value, ... >
+	AddCustomFields(fields ...CustomField) // add custom fields to message. Required use as < key, value, ... >
 
 	SetMarkDownSupport(status bool) // set markDown support
 }
@@ -125,12 +126,18 @@ func (m *BaseMessage) SetContentURI(contentURI id.ContentURI) {
 	m.file.contentURI = contentURI
 }
 
-func (m *BaseMessage) AddCustomFields(values ...any) {
+type CustomField struct {
+	Key   string
+	Value any
+}
+
+func (m *BaseMessage) AddCustomFields(fields ...CustomField) {
 	if m.customFields == nil {
 		m.customFields = make(map[string]any)
 	}
-	for i := 0; i < len(values); i += 2 {
-		m.customFields[values[i].(string)] = values[i+1]
+
+	for _, f := range fields {
+		m.customFields[f.Key] = f.Value
 	}
 }
 

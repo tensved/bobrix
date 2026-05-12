@@ -148,7 +148,7 @@ func (c *DefaultCtx) TextAnswer(text string) error {
 // ErrorAnswer - send a text error message to the room with error_code added
 func (c *DefaultCtx) ErrorAnswer(errorText string, errorType int) error {
 	msg := messages.NewText(errorText)
-	msg.AddCustomFields("error_code", errorType)
+	msg.AddCustomFields(messages.CustomField{Key: "error_code", Value: errorType})
 	return c.Answer(msg)
 }
 
@@ -166,7 +166,7 @@ func (c *DefaultCtx) Send(msg messages.Message) error {
 		})
 	}
 
-	msg.AddCustomFields(domctx.AnswerToCustomField, c.event.ID)
+	msg.AddCustomFields(messages.CustomField{Key: domctx.AnswerToCustomField, Value: c.event.ID})
 	return c.botMessaging.SendMessage(c.Context(), c.event.RoomID, msg)
 }
 
