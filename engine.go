@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Engine is the main component of the library
@@ -117,12 +119,12 @@ func (e *Engine) Services() []*BobrixService {
 }
 
 // GetService - return service by name. If the service is not found, it returns nil
-func (e *Engine) GetService(name string) *BobrixService {
+func (e *Engine) GetService(id uuid.UUID) *BobrixService {
 	e.mx.RLock()
 	defer e.mx.RUnlock()
 
 	for _, service := range e.services {
-		if service.Service.Name == name {
+		if service.Service.ID == id {
 			return service
 		}
 	}

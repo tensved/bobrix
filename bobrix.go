@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tensved/bobrix/contracts"
@@ -96,9 +97,25 @@ func (bx *Bobrix) ConnectService(service *contracts.Service, handler ServiceHand
 	}
 
 	bx.servicesByID[service.ID] = bs
-	bx.serviceIDsByName[service.Name] = service.ID
+	bx.serviceIDsByName[normalizeServiceName(service.Name)] = service.ID
 
 	return service.ID
+}
+
+func (bx *Bobrix) DisconnectService(id uuid.UUID) {
+	svc, ok := bx.servicesByID[id]
+	if !ok {
+		return
+	}
+
+	delete(bx.servicesByID, id)
+
+	if svc != nil && svc.Service != nil {
+		delete(
+			bx.serviceIDsByName,
+			normalizeServiceName(svc.Service.Name),
+		)
+	}
 }
 
 // Use - add handler to the bot
@@ -110,14 +127,12 @@ func (bx *Bobrix) Use(handler mxbot.EventHandler) {
 // GetService - return service by name. If the service is not found, it returns nil
 // It is case-insensitive. All services are stored in lowercase
 func (bx *Bobrix) GetServiceByID(id uuid.UUID) (*BobrixService, bool) {
-	slog.Info("---------------", "bx.servicesByID", bx.servicesByID)
 	svc, ok := bx.servicesByID[id]
 	return svc, ok
 }
 
 func (bx *Bobrix) GetServiceByName(name string) (*BobrixService, bool) {
-	slog.Info("---------------", "bx.serviceIDsByName", bx.serviceIDsByName)
-	id, ok := bx.serviceIDsByName[name]
+	id, ok := bx.serviceIDsByName[normalizeServiceName(name)]
 	if !ok {
 		return nil, false
 	}
@@ -324,4 +339,8 @@ func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contr
 	}
 
 	return msgs
+}
+
+func normalizeServiceName(serviceName string) string {
+	return strings.Join(strings.Fields(serviceName), " ")
 }
