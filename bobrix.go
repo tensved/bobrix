@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/tensved/bobrix/contracts"
@@ -89,10 +88,6 @@ func (bx *Bobrix) ConnectService(service *contracts.Service, handler ServiceHand
 		bx.logger.Error("ConnectService: nil service")
 		return uuid.Nil
 	}
-	if service.ID == uuid.Nil {
-		bx.logger.Warn("ConnectService: service has nil ID, generating", "name", service.Name)
-		service.ID = uuid.New()
-	}
 
 	bs := &BobrixService{
 		Service:  service,
@@ -101,7 +96,7 @@ func (bx *Bobrix) ConnectService(service *contracts.Service, handler ServiceHand
 	}
 
 	bx.servicesByID[service.ID] = bs
-	bx.serviceIDsByName[strings.ToLower(service.Name)] = service.ID
+	bx.serviceIDsByName[service.Name] = service.ID
 
 	return service.ID
 }
@@ -115,12 +110,14 @@ func (bx *Bobrix) Use(handler mxbot.EventHandler) {
 // GetService - return service by name. If the service is not found, it returns nil
 // It is case-insensitive. All services are stored in lowercase
 func (bx *Bobrix) GetServiceByID(id uuid.UUID) (*BobrixService, bool) {
+	slog.Info("---------------", "bx.servicesByID", bx.servicesByID)
 	svc, ok := bx.servicesByID[id]
 	return svc, ok
 }
 
 func (bx *Bobrix) GetServiceByName(name string) (*BobrixService, bool) {
-	id, ok := bx.serviceIDsByName[strings.ToLower(name)]
+	slog.Info("---------------", "bx.serviceIDsByName", bx.serviceIDsByName)
+	id, ok := bx.serviceIDsByName[name]
 	if !ok {
 		return nil, false
 	}
@@ -172,11 +169,6 @@ func (bx *Bobrix) SetContractParser(
 			func(ctx mxbot.Ctx) error {
 				req := parser(ctx.Event())
 
-				ids := make([]string, 0, len(bx.servicesByID))
-				for id, s := range bx.servicesByID {
-					ids = append(ids, id.String()+"("+s.Service.Name+")")
-				}
-
 				if raw := ctx.Event().Content.Raw; raw != nil {
 					if p, ok := raw[BobrixPromptTag]; ok {
 						bx.logger.Info("raw bobrix.prompt", "prompt", p)
@@ -216,6 +208,7 @@ func (bx *Bobrix) SetContractParser(
 					}
 
 					svc, ok = bx.GetServiceByID(id)
+
 					if !ok && req.ServiceName != "" {
 						bx.logger.Warn("service_id not found, fallback to name",
 							"service_id", req.ServiceID,
@@ -232,6 +225,18 @@ func (bx *Bobrix) SetContractParser(
 							contracts.ErrCodeServiceNotFound,
 						)
 					}
+				}
+
+				if !ok || svc == nil {
+					bx.logger.Error("service not found",
+						"service_id", req.ServiceID,
+						"service_name", req.ServiceName,
+					)
+
+					return ctx.ErrorAnswer(
+						fmt.Sprintf("Service %q not found", req.ServiceName),
+						contracts.ErrCodeServiceNotFound,
+					)
 				}
 
 				// service offline
