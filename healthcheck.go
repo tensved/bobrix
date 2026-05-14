@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	healthOk    = "healthy"   // used if service is healthy
-	healthError = "unhealthy" // used if service is unhealthy (when ping returns an error)
+	HealthOk    = "healthy"   // used if service is healthy
+	HealthError = "unhealthy" // used if service is unhealthy (when ping returns an error)
 )
 
 // Health - status of bot and service
@@ -205,7 +205,7 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 			// if isAutoSwitch is enabled, update service status based on health
 			if h.isAutoSwitch {
-				if health.Status == healthOk {
+				if health.Status == HealthOk {
 					h.bobrix.Services()[i].IsOnline = true
 
 					h.bobrix.bot.SetOnlineStatus()
@@ -228,16 +228,16 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 	bobrixHealth := Health{
 		LastChecked: time.Now(),
-		Status:      healthOk,
+		Status:      HealthOk,
 	}
 
-	if botStatus.Status == healthError {
-		bobrixHealth.Status = healthError
+	if botStatus.Status == HealthError {
+		bobrixHealth.Status = HealthError
 	}
 
 	for _, svc := range serviceStatuses {
-		if svc.Status == healthError {
-			bobrixHealth.Status = healthError
+		if svc.Status == HealthError {
+			bobrixHealth.Status = HealthError
 		}
 	}
 
@@ -251,13 +251,13 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 func (h *DefaultHealthcheck) getBotStatus(ctx context.Context) Health {
 	status := Health{
 		LastChecked: time.Now(),
-		Status:      healthOk,
+		Status:      HealthOk,
 	}
 
 	if err := h.bobrix.bot.Ping(ctx); err != nil {
 		status = Health{
 			LastChecked: time.Now(),
-			Status:      healthError,
+			Status:      HealthError,
 			Error:       err.Error(),
 		}
 	}
@@ -268,13 +268,13 @@ func (h *DefaultHealthcheck) getBotStatus(ctx context.Context) Health {
 func (h *DefaultHealthcheck) getServiceHealth(ctx context.Context, service *BobrixService) Health {
 	status := Health{
 		LastChecked: time.Now(),
-		Status:      healthOk,
+		Status:      HealthOk,
 	}
 
 	if err := service.Service.Ping(ctx); err != nil {
 		status = Health{
 			LastChecked: time.Now(),
-			Status:      healthError,
+			Status:      HealthError,
 			Error:       err.Error(),
 		}
 	}
