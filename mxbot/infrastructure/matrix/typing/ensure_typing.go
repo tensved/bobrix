@@ -96,54 +96,46 @@ func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl 
 	rt.done = done
 	rt.mu.Unlock()
 
-	// watcher: TTL
-	go b.watchTTL(roomID, rt, timer)
-
-	// watcher: done
-	go b.watchDone(roomID, rt, done)
+	// Single watcher handles both TTL expiry and early loop exit.
+	go b.watch(roomID, rt, timer, done)
 }
 
-func (b *Service) watchTTL(roomID id.RoomID, rt *roomTyping, timer *time.Timer) {
-	<-timer.C
-
-	rt.mu.Lock()
-	if !rt.running {
+func (b *Service) watch(roomID id.RoomID, rt *roomTyping, timer *time.Timer, done <-chan struct{}) {
+	select {
+	case <-timer.C:
+		rt.mu.Lock()
+		if !rt.running {
+			rt.mu.Unlock()
+			return
+		}
+		rt.running = false
+		cancel := rt.cancel
+		rt.cancel = nil
+		rt.done = nil
+		if rt.timer == timer {
+			rt.timer = nil
+		}
 		rt.mu.Unlock()
-		return
-	}
-	rt.running = false
-	cancel := rt.cancel
-	rt.cancel = nil
-	rt.done = nil
-	// timer consumed
-	if rt.timer == timer {
-		rt.timer = nil
-	}
-	rt.mu.Unlock()
 
-	if cancel != nil {
-		cancel()
-	}
+		if cancel != nil {
+			cancel()
+		}
 
-	b.rooms.Delete(roomID)
-}
-
-func (b *Service) watchDone(roomID id.RoomID, rt *roomTyping, done <-chan struct{}) {
-	<-done
-
-	rt.mu.Lock()
-	if !rt.running {
+	case <-done:
+		rt.mu.Lock()
+		if !rt.running {
+			rt.mu.Unlock()
+			return
+		}
+		rt.running = false
+		rt.cancel = nil
+		rt.done = nil
+		if rt.timer != nil {
+			rt.timer.Stop()
+			rt.timer = nil
+		}
 		rt.mu.Unlock()
-		return
 	}
-	rt.running = false
-	rt.cancel = nil
-	rt.done = nil
-	if rt.timer != nil {
-		rt.timer.Stop()
-		rt.timer = nil
-	}
-	rt.mu.Unlock()
 
 	b.rooms.Delete(roomID)
 }
