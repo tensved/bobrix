@@ -31,29 +31,10 @@ func (d *Dispatcher) HandleMatrixEvent(ctx context.Context, evt *event.Event) er
 		return err
 	}
 
-	var typingStarted bool
 	for _, h := range d.handlers {
 		if h.EventType() != evt.Type {
 			continue
 		}
-
-		// Start typing only when we know this handler will actually process the event.
-		// Pre-checking per-handler filters prevents all bots from typing for messages
-		// intended for a specific bot.
-		if !typingStarted && evt.Type == event.EventMessage {
-			willHandle := true
-			for _, f := range h.Filters() {
-				if !f(evt) {
-					willHandle = false
-					break
-				}
-			}
-			if willHandle {
-				d.bot.EnsureTyping(ctx, evt.RoomID, d.bot.GetTypingTimeout())
-				typingStarted = true
-			}
-		}
-
 		if err := h.Handle(eventContext); err != nil {
 			return err
 		}

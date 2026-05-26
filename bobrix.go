@@ -207,6 +207,9 @@ func (bx *Bobrix) SetContractParser(
 					return nil
 				}
 
+				// Only this bot claimed the request — start typing now.
+				bx.bot.EnsureTyping(ctx.Context(), ctx.Event().RoomID, bx.bot.GetTypingTimeout())
+
 				// --- Resolve service: prefer ServiceID, fallback to ServiceName ---
 				var (
 					svc *BobrixService
