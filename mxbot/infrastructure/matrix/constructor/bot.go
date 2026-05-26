@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	defaultTypingTimeout = 30 * time.Second
+	defaultTypingTimeout = 5 * time.Second
 )
 
 type Config struct {
