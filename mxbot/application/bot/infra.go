@@ -89,8 +89,8 @@ func (b *DefaultBot) GetMessagesFromRoomByDuration(ctx context.Context, roomID i
 
 // ----- BotTyping
 
-func (b *DefaultBot) EnsureTyping(ctx context.Context, roomID id.RoomID, ttl time.Duration) {
-	b.typing.EnsureTyping(ctx, roomID, ttl)
+func (b *DefaultBot) EnsureTyping(ctx context.Context, roomID id.RoomID, ttl time.Duration) func() {
+	return b.typing.EnsureTyping(ctx, roomID, ttl)
 }
 
 func (b *DefaultBot) LoopTyping(ctx context.Context, roomID id.RoomID) (cancelTyping func(), ch <-chan struct{}, err error) {
