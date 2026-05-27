@@ -15,16 +15,21 @@ type roomTyping struct {
 
 	// loop lifecycle
 	running bool
-	cancel  func()          // idempotent stop
+	refs    int            // number of active callers holding a stop func
+	cancel  func()         // idempotent stop
 	done    <-chan struct{} // closed when loop ends
 }
 
 // EnsureTyping guarantees a maximum of one typing loop per roomID (within a single bot).
-// Each call extends the TTL. After the TTL, typing is disabled and the entry is deleted.
-func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl time.Duration) {
+// Each call extends the TTL fallback and returns a stop func.
+// Calling the returned stop func decrements the ref-count; the loop is cancelled
+// only when the last caller stops (or the TTL fallback fires).
+func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl time.Duration) func() {
 	if ttl <= 0 {
 		ttl = b.typingTimeout
 	}
+
+	noop := func() {}
 
 	v, _ := b.rooms.LoadOrStore(roomID, &roomTyping{})
 	rt := v.(*roomTyping)
@@ -36,12 +41,11 @@ func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl 
 
 	rt.mu.Lock()
 
-	// (re)arm timer
+	// (re)arm TTL fallback timer
 	if rt.timer == nil {
 		rt.timer = time.NewTimer(ttl)
 	} else {
 		if !rt.timer.Stop() {
-			// drain if fired
 			select {
 			case <-rt.timer.C:
 			default:
@@ -54,26 +58,44 @@ func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl 
 		rt.running = true
 		needStart = true
 		loopCtx, loopCancel = context.WithCancel(workerCtx)
-
-		// temporary cancel until we get a real cancelLoop from LoopTyping
 		rt.cancel = func() { loopCancel() }
 	}
 
+	rt.refs++
+	refs := rt.refs
 	timer := rt.timer
 	rt.mu.Unlock()
 
-	// --- if loop already exists, just extend TTL
+	_ = refs // used implicitly via the closure below
+
+	// Build a stop func that decrements the ref-count and cancels only when last.
+	var once sync.Once
+	stopFunc := func() {
+		once.Do(func() {
+			rt.mu.Lock()
+			rt.refs--
+			remaining := rt.refs
+			cancel := rt.cancel
+			rt.mu.Unlock()
+
+			if remaining <= 0 && cancel != nil {
+				cancel()
+			}
+		})
+	}
+
+	// --- if loop already exists, just extended TTL and return a stop func
 	if !needStart {
-		return
+		return stopFunc
 	}
 
 	cancelLoop, done, err := b.LoopTyping(loopCtx, roomID)
 	if err != nil {
 		loopCancel()
 
-		// rollback + cleanup
 		rt.mu.Lock()
 		rt.running = false
+		rt.refs = 0
 		rt.cancel = nil
 		rt.done = nil
 		if rt.timer != nil {
@@ -83,7 +105,7 @@ func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl 
 		rt.mu.Unlock()
 
 		b.rooms.Delete(roomID)
-		return
+		return noop
 	}
 
 	stop := func() {
@@ -96,8 +118,9 @@ func (b *Service) EnsureTyping(workerCtx context.Context, roomID id.RoomID, ttl 
 	rt.done = done
 	rt.mu.Unlock()
 
-	// Single watcher handles both TTL expiry and early loop exit.
 	go b.watch(roomID, rt, timer, done)
+
+	return stopFunc
 }
 
 func (b *Service) watch(roomID id.RoomID, rt *roomTyping, timer *time.Timer, done <-chan struct{}) {
@@ -109,6 +132,7 @@ func (b *Service) watch(roomID id.RoomID, rt *roomTyping, timer *time.Timer, don
 			return
 		}
 		rt.running = false
+		rt.refs = 0
 		cancel := rt.cancel
 		rt.cancel = nil
 		rt.done = nil
@@ -128,6 +152,7 @@ func (b *Service) watch(roomID id.RoomID, rt *roomTyping, timer *time.Timer, don
 			return
 		}
 		rt.running = false
+		rt.refs = 0
 		rt.cancel = nil
 		rt.done = nil
 		if rt.timer != nil {

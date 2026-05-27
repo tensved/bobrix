@@ -35,6 +35,7 @@ func (d *Dispatcher) HandleMatrixEvent(ctx context.Context, evt *event.Event) er
 		if h.EventType() != evt.Type {
 			continue
 		}
+
 		if err := h.Handle(eventContext); err != nil {
 			return err
 		}
