@@ -2,6 +2,7 @@ package mxbot
 
 import (
 	applfilters "github.com/tensved/bobrix/mxbot/application/filters"
+	"maunium.net/go/mautrix/event"
 
 	dombot "github.com/tensved/bobrix/mxbot/domain/bot"
 	domfilters "github.com/tensved/bobrix/mxbot/domain/filters"
@@ -37,4 +38,8 @@ func FilterTagMeOrPrivate(b Bot) domfilters.Filter {
 
 func FilterNotMe(bot dombot.BotInfo) domfilters.Filter {
 	return applfilters.FilterNotMe(bot)
+}
+
+func FilterMembershipEvent(m event.Membership) domfilters.Filter {
+	return applfilters.FilterMembershipEvent(m)
 }
