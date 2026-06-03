@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -20,8 +22,8 @@ type Health struct {
 
 // BobrixStatus - status of the bot. Contains the health of the bot and the health of the services
 type BobrixStatus struct {
-	MatrixStatus Health            `json:"matrix"`
-	Services     map[string]Health `json:"services"`
+	MatrixStatus Health               `json:"matrix"`
+	Services     map[uuid.UUID]Health `json:"services"`
 	Health
 }
 
@@ -192,7 +194,7 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 
 	svcLength := len(h.bobrix.Services()) // length of services array
 
-	serviceStatuses := make(map[string]Health, svcLength)
+	serviceStatuses := make(map[uuid.UUID]Health, svcLength)
 	mx := &sync.Mutex{}
 
 	wg.Add(svcLength) // add wg for each service
@@ -217,7 +219,7 @@ func (h *DefaultHealthcheck) GetHealth() *BobrixStatus {
 			}
 
 			mx.Lock()
-			serviceStatuses[service.Service.Name] = health
+			serviceStatuses[service.Service.ID] = health
 			mx.Unlock()
 
 			wg.Done()
