@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,6 +23,15 @@ type synapseCreateUserReq struct {
 func (a *Service) registerBot(ctx context.Context) error {
 	if a.creds.AdminToken == "" {
 		return fmt.Errorf("admin token is empty: cannot register user via synapse admin api")
+	}
+
+	localpart := a.creds.Username
+	if strings.HasPrefix(localpart, "@") {
+		// strip "@localpart:server" down to just localpart for validation
+		localpart = strings.TrimPrefix(strings.SplitN(localpart, ":", 2)[0], "@")
+	}
+	if strings.HasPrefix(localpart, "_") {
+		return fmt.Errorf("invalid username %q: Matrix user IDs may not begin with '_'", a.creds.Username)
 	}
 
 	// Collect the full MXID. If the Username already contains "@", we assume it's an MXID.
@@ -62,5 +72,6 @@ func (a *Service) registerBot(ctx context.Context) error {
 		return nil
 	}
 
-	return fmt.Errorf("synapse admin create user failed: status=%s", resp.Status)
+	respBody, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("synapse admin create user failed: status=%s body=%s", resp.Status, respBody)
 }
