@@ -64,8 +64,22 @@ func (s *FileSyncStore) saveLocked() error {
 		return err
 	}
 
-	tmp := filepath.Join(dir, filepath.Base(s.path)+".tmp")
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	f, err := os.CreateTemp(dir, ".sync-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 
