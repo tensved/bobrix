@@ -34,22 +34,8 @@ const BobrixPromptTag = "bobrix.prompt"
 // Request should be in the form of a JSON object with the following structure (ServiceRequest)
 // And it should have a tag "bobrix.prompt" in event.Content
 func BobrixContractParser(bot mxbot.Bot) ContractParser {
-	filters := []mxbot.Filter{
-		mxbot.FilterMessageText(),
-		//mxbot.FilterTagMe(bot),
-	}
-
 	return func(evt *event.Event) *ServiceRequest {
-		for _, filter := range filters {
-			if !filter(evt) {
-
-				slog.Info("filter failed", "event", evt)
-				return nil
-			}
-		}
-
 		if evt.Content.Raw == nil {
-			slog.Error("raw message is nil", "event", evt)
 			return nil
 		}
 
