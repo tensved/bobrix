@@ -19,4 +19,8 @@ type BotCrypto interface {
 	HandleToDevice(ctx context.Context, evt *event.Event)
 
 	ObserveEvent(evt *event.Event)
+
+	// Close flushes and closes the crypto store. Call it during graceful
+	// shutdown so persisted olm account state does not go stale.
+	Close() error
 }
