@@ -170,6 +170,10 @@ func (b *DefaultBot) ObserveEvent(evt *event.Event) {
 	b.crypto.ObserveEvent(evt)
 }
 
+func (b *DefaultBot) Close() error {
+	return b.crypto.Close()
+}
+
 // ----- EventDispatcher
 
 func (b *DefaultBot) AddEventHandler(h handlers.EventHandler) {

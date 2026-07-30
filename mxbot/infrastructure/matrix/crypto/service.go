@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"maunium.net/go/mautrix"
@@ -17,9 +18,49 @@ import (
 	utils "github.com/tensved/bobrix/mxbot/infrastructure/utils"
 )
 
+// olmAccountMismatchMsg is returned by mautrix's cryptohelper when the locally
+// persisted olm account is not marked as shared, but the homeserver already has
+// device keys for this device. This happens when the local crypto store
+// (.bin/crypto/store-*.db) is stale or was not flushed cleanly (e.g. the process
+// was killed between uploading keys to the server and persisting the "shared"
+// flag locally), while the device id itself was reused from a previous run.
+const olmAccountMismatchMsg = "olm account is not marked as shared, but there are keys on the server"
+
+// IsAccountKeyMismatch reports whether err is the local/remote olm account
+// desync described above.
+func IsAccountKeyMismatch(err error) bool {
+	return err != nil && strings.Contains(err.Error(), olmAccountMismatchMsg)
+}
+
+// ResetLocalState removes the persisted crypto store and saved device id for
+// the given bot username, forcing a brand-new device and olm account to be
+// created on the next login. Use this to recover from IsAccountKeyMismatch.
+func ResetLocalState(name string) error {
+	safeUser := utils.SafeFilePart(name)
+	dir := filepath.Join(".bin", "crypto")
+
+	matches, err := filepath.Glob(filepath.Join(dir, "store-"+safeUser+".db*"))
+	if err != nil {
+		return fmt.Errorf("glob crypto store: %w", err)
+	}
+	for _, m := range matches {
+		if err := os.Remove(m); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", m, err)
+		}
+	}
+
+	deviceIDFile := filepath.Join(dir, fmt.Sprintf("device-id-%s.txt", safeUser))
+	if err := os.Remove(deviceIDFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove %s: %w", deviceIDFile, err)
+	}
+
+	return nil
+}
+
 type Service struct {
 	client  *mautrix.Client
 	machine *crypto.OlmMachine
+	helper  *cryptohelper.CryptoHelper
 
 	encMu   sync.RWMutex
 	encRoom map[id.RoomID]bool
@@ -52,8 +93,20 @@ func New(client *mautrix.Client, pickleKey []byte, name string) (*Service, error
 	return &Service{
 		client:  client,
 		machine: m,
+		helper:  helper,
 		encRoom: make(map[id.RoomID]bool),
 	}, nil
+}
+
+// Close flushes and closes the underlying crypto store. It must be called
+// during a graceful shutdown so the olm account's "shared" state is
+// persisted to disk; skipping this is what allows the local store to end up
+// stale relative to the homeserver after a restart (see IsAccountKeyMismatch).
+func (s *Service) Close() error {
+	if s == nil || s.helper == nil {
+		return nil
+	}
+	return s.helper.Close()
 }
 
 func (s *Service) IsEncrypted(evt *event.Event) bool {

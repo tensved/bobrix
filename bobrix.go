@@ -78,7 +78,14 @@ func (bx *Bobrix) Run(ctx context.Context) error {
 }
 
 func (bx *Bobrix) Stop(ctx context.Context) error {
-	return bx.bot.StopListening(ctx)
+	stopErr := bx.bot.StopListening(ctx)
+
+	if closeErr := bx.bot.Close(); closeErr != nil {
+		bx.logger.Error("failed to close bot crypto store", "error", closeErr)
+		return errors.Join(stopErr, closeErr)
+	}
+
+	return stopErr
 }
 
 // ConnectService - add service to the bot

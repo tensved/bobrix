@@ -130,6 +130,23 @@ func NewMatrixBot(cfg Config) (*MatrixBot, error) {
 
 	// --- crypto
 	cryptoSvc, err := crypto.New(rawClient, cfg.Credentials.PickleKey, cfg.Credentials.Username)
+	if crypto.IsAccountKeyMismatch(err) {
+		cfg.Logger.Warn().Err(err).Msg(
+			"local olm account is out of sync with the homeserver (likely a stale crypto store " +
+				"left over from an unclean restart); resetting local crypto state and re-authorizing with a new device",
+		)
+
+		if resetErr := crypto.ResetLocalState(cfg.Credentials.Username); resetErr != nil {
+			return nil, fmt.Errorf("failed to reset local crypto state after olm account mismatch: %w", resetErr)
+		}
+
+		// device id file was just removed, so this login will register a brand-new device
+		if err := authSvc.Authorize(context.Background()); err != nil {
+			return nil, fmt.Errorf("re-authorize after crypto reset: %w", err)
+		}
+
+		cryptoSvc, err = crypto.New(rawClient, cfg.Credentials.PickleKey, cfg.Credentials.Username)
+	}
 	if err != nil {
 		return nil, err
 	}
