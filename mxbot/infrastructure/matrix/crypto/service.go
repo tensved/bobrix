@@ -18,18 +18,39 @@ import (
 	utils "github.com/tensved/bobrix/mxbot/infrastructure/utils"
 )
 
-// olmAccountMismatchMsg is returned by mautrix's cryptohelper when the locally
-// persisted olm account is not marked as shared, but the homeserver already has
-// device keys for this device. This happens when the local crypto store
-// (.bin/crypto/store-*.db) is stale or was not flushed cleanly (e.g. the process
-// was killed between uploading keys to the server and persisting the "shared"
-// flag locally), while the device id itself was reused from a previous run.
-const olmAccountMismatchMsg = "olm account is not marked as shared, but there are keys on the server"
+// olmAccountMismatchMsgs are the error messages mautrix's cryptohelper returns
+// from verifyDeviceKeysOnServer when the locally persisted olm account state
+// disagrees with what the homeserver has on record for this device:
+//   - the local account isn't marked as shared, but the server already has keys
+//     for the device (e.g. the process was killed between uploading keys and
+//     persisting the "shared" flag locally);
+//   - the local account is marked as shared, but the server has no keys for the
+//     device anymore (e.g. the device was deleted/logged out server-side);
+//   - the identity key on the server for this device doesn't match the local
+//     olm account's identity key (the local crypto store and the device id are
+//     out of sync, e.g. one was reset/reused without the other).
+// In all three cases the fix is the same: the local crypto store and device id
+// are unrecoverably out of sync with the server, so reset both and log in with
+// a fresh device.
+var olmAccountMismatchMsgs = []string{
+	"olm account is not marked as shared, but there are keys on the server",
+	"olm account is marked as shared, keys seem to have disappeared from the server",
+	"mismatching identity key on server",
+}
 
-// IsAccountKeyMismatch reports whether err is the local/remote olm account
-// desync described above.
+// IsAccountKeyMismatch reports whether err is one of the local/remote olm
+// account desyncs described above.
 func IsAccountKeyMismatch(err error) bool {
-	return err != nil && strings.Contains(err.Error(), olmAccountMismatchMsg)
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	for _, m := range olmAccountMismatchMsgs {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // ResetLocalState removes the persisted crypto store and saved device id for
