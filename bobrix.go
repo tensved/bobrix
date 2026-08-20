@@ -335,18 +335,36 @@ func (bx *Bobrix) SetContractParser(
 }
 
 func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contracts.Messages {
-	msgs := make([]map[contracts.ChatRole]string, len(thread.Messages))
+	msgs := make(contracts.Messages, 0, len(thread.Messages))
 
-	for i, msg := range thread.Messages {
-		msgs[i] = map[contracts.ChatRole]string{}
-
-		body := msg.Content.AsMessage().Body
-
-		if msg.Sender.String() == botName {
-			msgs[i][contracts.AssistantRole] = body
-		} else {
-			msgs[i][contracts.UserRole] = body
+	for _, evt := range thread.Messages {
+		content := evt.Content.AsMessage()
+		if content == nil {
+			continue
 		}
+
+		role := contracts.UserRole
+		if evt.Sender.String() == botName {
+			role = contracts.AssistantRole
+		}
+
+		chatMsg := contracts.ChatMessage{Role: role, Content: content.Body}
+
+		switch content.MsgType {
+		case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile:
+			if content.URL != "" {
+				chatMsg.Attachments = []string{string(content.URL)}
+			}
+		}
+
+		// Neither a text body nor a carried attachment: the event isn't a message
+		// this thread can represent (e.g. state events like tombstones ending up in
+		// Messages), so skip it rather than sending the model an empty turn.
+		if chatMsg.Content == "" && len(chatMsg.Attachments) == 0 {
+			continue
+		}
+
+		msgs = append(msgs, chatMsg)
 	}
 
 	return msgs
