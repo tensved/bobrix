@@ -37,6 +37,51 @@ func (e *Engine) ConnectBot(bot *Bobrix) {
 	e.mx.Unlock()
 }
 
+// DisconnectBot - stop the bot and remove it, together with its services, from the engine.
+// After it returns GetBot(name) is nil, so a bot with the same name can be connected again.
+// It returns false if no bot with this name is connected.
+// The bot's healthcheck keeps running while it has subscribers: callers must unsubscribe.
+func (e *Engine) DisconnectBot(ctx context.Context, name string) (bool, error) {
+	e.mx.Lock()
+
+	var removed *Bobrix
+	bots := make([]*Bobrix, 0, len(e.bots))
+	for _, bot := range e.bots {
+		if removed == nil && bot.Name() == name {
+			removed = bot
+			continue
+		}
+		bots = append(bots, bot)
+	}
+
+	if removed == nil {
+		e.mx.Unlock()
+		return false, nil
+	}
+
+	// Compare by pointer, not by service ID: another bot (e.g. a multibot)
+	// may serve the same service through its own BobrixService.
+	owned := make(map[*BobrixService]struct{}, len(removed.servicesByID))
+	for _, svc := range removed.servicesByID {
+		owned[svc] = struct{}{}
+	}
+
+	services := make([]*BobrixService, 0, len(e.services))
+	for _, svc := range e.services {
+		if _, ok := owned[svc]; !ok {
+			services = append(services, svc)
+		}
+	}
+
+	// New slices instead of in-place removal: Bots and Services hand out
+	// the backing arrays, which callers may still be iterating.
+	e.bots = bots
+	e.services = services
+	e.mx.Unlock()
+
+	return true, removed.Stop(ctx)
+}
+
 // ConnectService - add service to the store in engine.
 func (e *Engine) ConnectService(service *BobrixService) {
 	e.mx.Lock()
