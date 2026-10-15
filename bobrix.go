@@ -35,6 +35,10 @@ type Bobrix struct {
 
 	Healthchecker Healthcheck
 	logger        *slog.Logger
+
+	// callSlots limits service calls running outside the sync worker;
+	// nil means calls run synchronously (see WithAsyncCalls)
+	callSlots chan struct{}
 }
 
 type BobrixOpts func(*Bobrix)
@@ -214,124 +218,130 @@ func (bx *Bobrix) SetContractParser(
 					return nil
 				}
 
-				// Only this bot claimed the request — start typing and stop when done.
-				stopTyping := bx.bot.EnsureTyping(ctx.Context(), ctx.Event().RoomID, bx.bot.GetTypingTimeout())
-				defer stopTyping()
-
-				// --- Resolve service: prefer ServiceID, fallback to ServiceName ---
-				var (
-					svc *BobrixService
-					ok  bool
-				)
-
-				if req.ServiceID != "" {
-					id, err := uuid.Parse(req.ServiceID)
-					if err != nil {
-						return ctx.ErrorAnswer(
-							fmt.Sprintf("Invalid service_id %q", req.ServiceID),
-							contracts.ErrCodeBadRequest,
-						)
-					}
-
-					svc, ok = bx.GetServiceByID(id)
-
-					if !ok && req.ServiceName != "" {
-						bx.logger.Warn("service_id not found, fallback to name",
-							"service_id", req.ServiceID,
-							"service_name", req.ServiceName,
-						)
-						svc, ok = bx.GetServiceByName(req.ServiceName)
-					}
-				} else {
-					svc, ok = bx.GetServiceByName(req.ServiceName)
-					if !ok {
-						bx.logger.Error("service not found", "service", req.ServiceName)
-						return ctx.ErrorAnswer(
-							fmt.Sprintf("Service %q not found", req.ServiceName),
-							contracts.ErrCodeServiceNotFound,
-						)
-					}
-				}
-
-				if !ok || svc == nil {
-					bx.logger.Error("service not found",
-						"service_id", req.ServiceID,
-						"service_name", req.ServiceName,
-					)
-
-					return ctx.ErrorAnswer(
-						fmt.Sprintf("Service %q not found", req.ServiceName),
-						contracts.ErrCodeServiceNotFound,
-					)
-				}
-
-				// service offline
-				if !svc.IsOnline {
-					svc.Handler(ctx, &contracts.MethodResponse{
-						Err: fmt.Errorf("Service %q is offline", svc.Service.Name),
-					}, nil)
-					return nil
-				}
-
-				callOpts := contracts.CallOpts{}
-				if thread := ctx.Thread(); thread != nil {
-					data := ConvertThreadToMessages(thread, ctx.Bot().FullName())
-					callOpts.Messages = data
-				}
-
-				if opt.PreCallHook != nil {
-					errMsg, errCode, err := opt.PreCallHook(ctx, req)
-					if err != nil {
-						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
-							return err
-						}
-						return err
-					}
-				}
-
-				resp, err := svc.Service.CallMethod(
-					ctx.Context(),
-					req.MethodName,
-					req.InputParams,
-					callOpts,
-				)
-				if err != nil {
-					switch {
-					case errors.Is(err, contracts.ErrMethodNotFound):
-						if err := ctx.ErrorAnswer(
-							fmt.Sprintf("Method %q not found", req.MethodName),
-							contracts.ErrCodeMethodNotFound,
-						); err != nil {
-							return err
-						}
-					default:
-						// resp may be nil if CallMethod returned error before response creation
-						errCode := contracts.ErrCodeInternalServiceError
-						if resp != nil && resp.ErrCode != 0 {
-							errCode = resp.ErrCode
-						}
-						if err := ctx.ErrorAnswer(err.Error(), errCode); err != nil {
-							return err
-						}
-					}
-					return nil
-				}
-
-				if opt.AfterCallHook != nil {
-					errMsg, errCode, err := opt.AfterCallHook(ctx, req, resp)
-					if err != nil {
-						if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
-							return err
-						}
-						return err
-					}
-				}
-
-				svc.Handler(ctx, resp, nil)
-				return nil
+				return bx.dispatchServiceRequest(ctx, req, opt)
 			},
 		),
 	)
+}
+
+// handleServiceRequest resolves the requested service, runs the hooks, calls
+// the service and passes its response to the service handler.
+func (bx *Bobrix) handleServiceRequest(ctx mxbot.Ctx, req *ServiceRequest, opt ContractParserOpts) error {
+	// Only this bot claimed the request — start typing and stop when done.
+	stopTyping := bx.bot.EnsureTyping(ctx.Context(), ctx.Event().RoomID, bx.bot.GetTypingTimeout())
+	defer stopTyping()
+
+	// --- Resolve service: prefer ServiceID, fallback to ServiceName ---
+	var (
+		svc *BobrixService
+		ok  bool
+	)
+
+	if req.ServiceID != "" {
+		id, err := uuid.Parse(req.ServiceID)
+		if err != nil {
+			return ctx.ErrorAnswer(
+				fmt.Sprintf("Invalid service_id %q", req.ServiceID),
+				contracts.ErrCodeBadRequest,
+			)
+		}
+
+		svc, ok = bx.GetServiceByID(id)
+
+		if !ok && req.ServiceName != "" {
+			bx.logger.Warn("service_id not found, fallback to name",
+				"service_id", req.ServiceID,
+				"service_name", req.ServiceName,
+			)
+			svc, ok = bx.GetServiceByName(req.ServiceName)
+		}
+	} else {
+		svc, ok = bx.GetServiceByName(req.ServiceName)
+		if !ok {
+			bx.logger.Error("service not found", "service", req.ServiceName)
+			return ctx.ErrorAnswer(
+				fmt.Sprintf("Service %q not found", req.ServiceName),
+				contracts.ErrCodeServiceNotFound,
+			)
+		}
+	}
+
+	if !ok || svc == nil {
+		bx.logger.Error("service not found",
+			"service_id", req.ServiceID,
+			"service_name", req.ServiceName,
+		)
+
+		return ctx.ErrorAnswer(
+			fmt.Sprintf("Service %q not found", req.ServiceName),
+			contracts.ErrCodeServiceNotFound,
+		)
+	}
+
+	// service offline
+	if !svc.IsOnline {
+		svc.Handler(ctx, &contracts.MethodResponse{
+			Err: fmt.Errorf("Service %q is offline", svc.Service.Name),
+		}, nil)
+		return nil
+	}
+
+	callOpts := contracts.CallOpts{}
+	if thread := ctx.Thread(); thread != nil {
+		data := ConvertThreadToMessages(thread, ctx.Bot().FullName())
+		callOpts.Messages = data
+	}
+
+	if opt.PreCallHook != nil {
+		errMsg, errCode, err := opt.PreCallHook(ctx, req)
+		if err != nil {
+			if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
+				return err
+			}
+			return err
+		}
+	}
+
+	resp, err := svc.Service.CallMethod(
+		ctx.Context(),
+		req.MethodName,
+		req.InputParams,
+		callOpts,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, contracts.ErrMethodNotFound):
+			if err := ctx.ErrorAnswer(
+				fmt.Sprintf("Method %q not found", req.MethodName),
+				contracts.ErrCodeMethodNotFound,
+			); err != nil {
+				return err
+			}
+		default:
+			// resp may be nil if CallMethod returned error before response creation
+			errCode := contracts.ErrCodeInternalServiceError
+			if resp != nil && resp.ErrCode != 0 {
+				errCode = resp.ErrCode
+			}
+			if err := ctx.ErrorAnswer(err.Error(), errCode); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if opt.AfterCallHook != nil {
+		errMsg, errCode, err := opt.AfterCallHook(ctx, req, resp)
+		if err != nil {
+			if err := ctx.ErrorAnswer(errMsg, errCode); err != nil {
+				return err
+			}
+			return err
+		}
+	}
+
+	svc.Handler(ctx, resp, nil)
+	return nil
 }
 
 func ConvertThreadToMessages(thread *mxbot.MessagesThread, botName string) contracts.Messages {
